@@ -86,22 +86,22 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 
 ## Phase 1 — Package skeleton
 
-- [ ] **T1.1 `composer.json`**
+- [x] **T1.1 `composer.json`**
   - Path: `composer.json`
   - Name `reachweb/statamic-resrv-vouchers`, type `statamic-addon`, namespace `Reach\StatamicResrvVouchers\` autoloaded from `src/`.
-  - **Require:** `php ^8.2`, `statamic/cms ^5.0`, `laravel/framework ^11.0 || ^12.0`, `endroid/qr-code ^5.0`, `reachweb/statamic-resrv:dev-feature/building-email-event` (path repo) until Phase 0 lands.
-  - **Require-dev:** `orchestra/testbench ^9.0 || ^10.0`, `pestphp/pest ^3.0`, `pestphp/pest-plugin-laravel ^3.0`, `laravel/pint ^1.2`.
+  - **Require:** `php ^8.2`, `statamic/cms ^5.0`, `laravel/framework ^12.0 || ^13.0`, `endroid/qr-code ^5.0`, `reachweb/statamic-resrv:dev-feature/building-email-event` (path repo) until Phase 0 lands.
+  - **Require-dev:** `orchestra/testbench ^10.0 || ^11.0`, `pestphp/pest ^4.0`, `pestphp/pest-plugin-laravel ^4.0`, `laravel/pint ^1.2`.
   - `extra.laravel.providers` → `Reach\\StatamicResrvVouchers\\StatamicResrvVouchersServiceProvider`.
   - `extra.statamic.name`, `extra.statamic.description`.
   - Scripts: `test` → `vendor/bin/pest`, `test:stop` → `vendor/bin/pest --stop-on-failure`.
   - **Self-check:** `composer validate` is clean; `composer install` succeeds.
 
-- [ ] **T1.2 Service providers**
+- [x] **T1.2 Service providers**
   - `src/StatamicResrvVouchersServiceProvider.php` — aggregate, registers `VouchersProvider`.
   - `src/Providers/VouchersProvider.php` — extends `Statamic\Providers\AddonServiceProvider`. Sets `$routes['cp']`, `$listen` (empty for now), `$vite` (set up in Phase 9), and in `boot()` loads translations, views, migrations, merges config.
   - **Self-check:** package boots in Testbench without exception.
 
-- [ ] **T1.3 Config file**
+- [x] **T1.3 Config file**
   - Path: `config/resrv-vouchers.php`
   - Keys:
     ```php
@@ -121,17 +121,17 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
   - Merged into the container under key `resrv-vouchers`. Publish tag `resrv-vouchers-config`.
   - **Self-check:** `config('resrv-vouchers.grace_days')` returns `1` in a Testbench boot test.
 
-- [ ] **T1.4 Base directory scaffolding**
+- [x] **T1.4 Base directory scaffolding**
   - Create empty dirs: `src/Console/Commands/`, `src/Events/`, `src/Http/Controllers/`, `src/Http/Requests/`, `src/Listeners/`, `src/Mail/`, `src/Models/`, `src/Services/`, `src/Enums/`, `resources/lang/en/`, `resources/views/cp/vouchers/`, `resources/views/email/vouchers/`, `resources/js/components/`, `routes/`, `database/migrations/`, `tests/Feature/`, `tests/Unit/`.
   - Add `.gitkeep` for any directory that won't have a file by end of this phase.
 
-- [ ] **T1.5 Pint + minimum CI**
+- [x] **T1.5 Pint + minimum CI**
   - Add `pint.json` (copy from Resrv).
   - Add a `composer test` alias that runs `vendor/bin/pest`. Optionally add a GitHub Actions workflow file later (defer; not required for this milestone).
 
 ## Phase 2 — Test bootstrap (PEST 3)
 
-- [ ] **T2.1 `tests/TestCase.php`**
+- [x] **T2.1 `tests/TestCase.php`**
   - Extend `Orchestra\Testbench\TestCase`.
   - `getPackageProviders()` returns: `\Statamic\Providers\StatamicServiceProvider`, `\Livewire\LivewireServiceProvider`, `\Reach\StatamicResrv\StatamicResrvServiceProvider`, `\Reach\StatamicResrvVouchers\StatamicResrvVouchersServiceProvider`.
   - `getPackageAliases()` returns `['Statamic' => \Statamic\Statamic::class]`.
@@ -139,31 +139,31 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
   - Use `RefreshDatabase`, `FakesViews` (if needed), `PreventSavingStacheItemsToDisk` (mirror Resrv's helpers — copy what's necessary).
   - Set test environment via `defineEnvironment()`: `DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:`, `MAIL_MAILER=array`, `CACHE_DRIVER=array`, `APP_KEY=base64:<fixed>`.
 
-- [ ] **T2.2 `tests/Pest.php`**
+- [x] **T2.2 `tests/Pest.php`**
   - `uses(TestCase::class)->in(__DIR__);`
   - Common expectations or datasets if needed (leave empty for now).
 
-- [ ] **T2.3 Helpers**
+- [x] **T2.3 Helpers**
   - In `TestCase.php` add: `signInAdmin()`, `ensureCollectionExists($handle, $route = '/{slug}')`, `makeStatamicItem(array $data = [], string $collection = 'pages')`, and a new `makeConfirmedReservation(array $overrides = [])` that creates a Statamic entry + a Resrv `Entry` row + a `Reservation` model in `confirmed` status. Use Resrv's existing factories where possible.
 
-- [ ] **T2.4 `phpunit.xml`**
+- [x] **T2.4 `phpunit.xml`**
   - PEST reads this for env. Include testsuite definitions for `Feature` and `Unit`. Set env: `DB_CONNECTION=sqlite`, `MAIL_MAILER=array`, `CACHE_DRIVER=array`, `APP_KEY=base64:AckfSECXIvnK5r28GVIWUAxmbBSjTsmF1+...` (any fixed key works).
 
-- [ ] **T2.5 Smoke test**
+- [x] **T2.5 Smoke test**
   - `tests/Feature/BootTest.php`: `it('boots the package without error', fn() => expect(app()->bound('config'))->toBeTrue());`
   - **Self-check:** `vendor/bin/pest` passes with 1 test.
 
 ## Phase 3 — Database & models
 
-- [ ] **T3.1 Migration: `resrv_vouchers`**
+- [x] **T3.1 Migration: `resrv_vouchers`**
   - Columns: `id` (string PK, UUID), `reservation_id` (unsigned big int, indexed, unique to keep generation idempotent), `token` (string, unique), `status` (string, indexed), `used_at` (timestamp, nullable), `used_by_user_id` (string nullable — Statamic user IDs are strings), `invalidated_reason` (text nullable), `expires_at` (timestamp), `timestamps`.
   - Do **not** add a FK constraint on `reservation_id` — Resrv migrations live in a separate package, FK order is fragile across drivers.
   - **Self-check:** migration runs on SQLite + roundtrips.
 
-- [ ] **T3.2 Migration: `resrv_voucher_scans`**
+- [x] **T3.2 Migration: `resrv_voucher_scans`**
   - Columns: `id` (auto-increment), `voucher_id` (string, indexed), `user_id` (string nullable), `action` (string: `scan|mark-used|un-mark`), `result` (string: `success|already-used|invalidated|expired|not-found`), `ip_address` (string, nullable), `user_agent` (text, nullable), `timestamps`.
 
-- [ ] **T3.3 `Voucher` model**
+- [x] **T3.3 `Voucher` model**
   - `src/Models/Voucher.php`
   - `protected $table = 'resrv_vouchers';`
   - `protected $keyType = 'string';` and `public $incrementing = false;` (UUID PK).
@@ -172,39 +172,39 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
   - Relations: `reservation()` belongsTo `Reach\StatamicResrv\Models\Reservation::class`, `scans()` hasMany `VoucherScan::class`.
   - Helper: `isExpired(): bool` (computed from `expires_at` vs `now()`).
 
-- [ ] **T3.4 `VoucherScan` model**
+- [x] **T3.4 `VoucherScan` model**
   - `src/Models/VoucherScan.php`
   - Relations: `voucher()`, `user()` (resolve via `Statamic::user($this->user_id)` accessor rather than belongsTo, because Statamic users aren't Eloquent in all setups).
 
-- [ ] **T3.5 `VoucherStatus` enum**
+- [x] **T3.5 `VoucherStatus` enum**
   - `src/Enums/VoucherStatus.php`
   - Cases: `Issued`, `Used`, `Invalidated`, `Expired`. Backed by string values lowercase.
 
-- [ ] **T3.6 Tests**
+- [x] **T3.6 Tests**
   - Unit tests: model boots, status cast works, `isExpired()` true when `expires_at < now()`.
   - **Self-check:** `vendor/bin/pest` green.
 
 ## Phase 4 — Token signer & QR renderer
 
-- [ ] **T4.1 `VoucherTokenSigner`**
+- [x] **T4.1 `VoucherTokenSigner`**
   - `src/Services/VoucherTokenSigner.php`
   - Constructor takes the signing key (resolved from `config('resrv-vouchers.signing_key') ?? config('app.key')`).
   - `sign(string $uuid): string` → `base64url(uuid) . '.' . base64url(hmac_sha256(uuid, key))`.
   - `verify(string $token): ?string` → returns the UUID on success, `null` on tamper / bad format. Use `hash_equals` for constant-time compare.
 
-- [ ] **T4.2 Signer unit tests**
+- [x] **T4.2 Signer unit tests**
   - Round-trip: sign → verify returns the original UUID.
   - Tamper: flipping any character in the token → verify returns null.
   - Wrong key: signer with different key rejects.
   - Malformed input (no dot, bad base64): null, no exception.
 
-- [ ] **T4.3 `QrRenderer`**
+- [x] **T4.3 `QrRenderer`**
   - `src/Services/QrRenderer.php`
   - `png(string $payload, int $size = 320): string` — bytes (use endroid/qr-code v5 builder API: `Builder::create()->writer(new PngWriter)->data($payload)->size($size)->build()->getString()`).
   - `pdf(Voucher $voucher): string` — bytes for a single-page A6 PDF containing the QR + customer name + reservation reference + date range. Use endroid's PDF writer if available, else fall back to a minimal hand-rolled `\Spatie\Browsershot\Browsershot` or `dompdf/dompdf` — pick whichever is simpler and document the choice in a code comment **only if non-obvious** (lean toward endroid's native PdfWriter when v5 supports it).
   - Pure service, no global state.
 
-- [ ] **T4.4 Renderer unit tests**
+- [x] **T4.4 Renderer unit tests**
   - PNG output starts with the PNG signature bytes (`\x89PNG\r\n\x1A\n`).
   - PDF output starts with `%PDF-`.
   - Both return non-empty.
@@ -452,3 +452,23 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 ## Done log (append-only — one line per completed task)
 
 <!-- e.g. T0.1 done 2026-05-15: BuildingReservationEmail event added; PHPUnit green. -->
+T1.1 done 2026-05-15: composer.json + path repo to ../statamic-resrv; composer validate clean, composer install succeeds. Resrv constraint relaxed to `*` until Phase 0 lands and the `feature/building-email-event` branch exists. Laravel ^12.0 || ^13.0 / Testbench ^10.0 || ^11.0 / PEST ^4.0 (Statamic 5 currently caps at L12, so Composer resolves to L12 until Statamic 6).
+T1.2 done 2026-05-15: Aggregate StatamicResrvVouchersServiceProvider + VouchersProvider (extends AddonServiceProvider) with `$routes['cp']`, empty `$listen`, and boot() loading translations/views/migrations/config. Placeholder `routes/cp.php` and `config/resrv-vouchers.php` added so boot doesn't fatal; T1.3 fleshes out the config. Smoke-booted under Orchestra Testbench's CreatesApplication — 63 providers loaded, `config('resrv-vouchers')` resolves.
+T1.3 done 2026-05-15: config/resrv-vouchers.php fleshed out with enabled_collections, grace_days, signing_key (env-driven), and email.attended block. Publish tag `resrv-vouchers-config` registered in VouchersProvider::boot(). Verified via BootTest assertion.
+T1.4 done 2026-05-15: Scaffolded src/{Console/Commands,Events,Http/Controllers,Http/Requests,Listeners,Mail,Models,Services,Enums,Exceptions} + resources/{lang/en,views/cp/vouchers,views/email/vouchers,js/components} + tests/{Feature,Unit}; added .gitkeep to dirs without files yet.
+T1.5 done 2026-05-15: pint.json (Laravel preset) added at addon root. composer test/test:stop scripts already present from T1.1. CI workflow deferred per task note.
+T2.1 done 2026-05-15: tests/TestCase.php extends OrchestraTestCase with RefreshDatabase, package providers (Statamic + Livewire + StatamicLivewire + Resrv + Vouchers), Statamic config copy, sites stub, and `defineDatabaseMigrations()` running `migrate` against the default sqlite-in-memory connection (the `--database=testbench` form failed with "connection not configured" against Testbench 11; default works).
+T2.2 done 2026-05-15: tests/Pest.php wires `uses(TestCase::class)->in(__DIR__)`.
+T2.3 done 2026-05-15: TestCase helpers added — signInAdmin(), ensureCollectionExists(), makeStatamicItem(), makeConfirmedReservation(). Latter creates Statamic entry + resrv_entries row + Customer + Reservation, since Resrv migrated `customer` JSON column → `customer_id` FK + Customer model in 2025-03-20 batch.
+T2.4 done 2026-05-15: phpunit.xml with Feature/Unit suites + sqlite-in-memory + array mailer/cache/session + sync queue + RESRV_VOUCHERS_SIGNING_KEY env. Mirrors Resrv's bootstrap shape.
+T2.5 done 2026-05-15: tests/Feature/BootTest.php — boot smoke test plus a config defaults assertion. Both green (2 passed, 3 assertions).
+T3.1 done 2026-05-15: 2026_05_15_000001 create resrv_vouchers (string PK, unique reservation_id + token, indexed status, expires_at, used_at, used_by_user_id, invalidated_reason). No FK on reservation_id per CLAUDE.md guidance — Resrv migrations live in a separate package.
+T3.2 done 2026-05-15: 2026_05_15_000002 create resrv_voucher_scans (auto-increment id, indexed voucher_id, action/result strings, ip + UA).
+T3.3 done 2026-05-15: Voucher model — string UUID PK, autogenerated in `creating` boot hook, casts (status enum + datetimes), reservation belongsTo + scans hasMany, isExpired() helper.
+T3.4 done 2026-05-15: VoucherScan model — guarded[]=[], voucher belongsTo, user accessor resolves Statamic::user($this->user_id) (no Eloquent FK because Statamic users may be flat-file).
+T3.5 done 2026-05-15: VoucherStatus backed enum — Issued/Used/Invalidated/Expired (lowercase string values).
+T3.6 done 2026-05-15: tests/Unit/VoucherModelTest.php — 6 tests covering UUID auto-generation, manual ID preservation, status enum cast roundtrip, isExpired true/false, scans relation. All green.
+T4.1 done 2026-05-15: VoucherTokenSigner — readonly key, sign() = base64url(uuid).base64url(hmac_sha256(uuid,key)), verify() returns uuid|null with hash_equals. Static `fromConfig()` resolves `resrv-vouchers.signing_key` then falls back to `app.key` (decodes the `base64:` prefix Laravel uses).
+T4.2 done 2026-05-15: tests/Unit/VoucherTokenSignerTest.php — round-trip, tamper, wrong-key, malformed, empty-key (throws), and two fromConfig() resolution paths. 7 passed.
+T4.3 done 2026-05-15: QrRenderer — png() via endroid v5 Builder + PngWriter; pdf() via FPDF (added setasign/fpdf ^1.8.2 to composer; A6 page size passed as [105,148] mm because FPDF doesn't recognise 'A6' string). Embeds the QR PNG centred + customer name + reference + date range. Reads customer name from Customer->data Collection (Resrv 2025-03 schema).
+T4.4 done 2026-05-15: tests/Unit/QrRendererTest.php — PNG signature byte check + %PDF- header check using a real Voucher attached to a makeConfirmedReservation(). Both green. Full suite: 17 passed (23 assertions). Pint clean.

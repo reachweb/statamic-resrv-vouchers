@@ -1,0 +1,77 @@
+{
+    "name": "reachweb/statamic-resrv-vouchers",
+    "description": "QR-code voucher generation, email delivery, and CP scanning for Statamic Resrv reservations.",
+    "keywords": [
+        "Statamic",
+        "Resrv",
+        "vouchers",
+        "qr-code",
+        "reservations"
+    ],
+    "license": "proprietary",
+    "type": "statamic-addon",
+    "authors": [
+        {
+            "name": "Iosif Chatzimichail",
+            "email": "iosif@reach.gr",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "email": "info@reach.gr"
+    },
+    "require": {
+        "php": "^8.2",
+        "statamic/cms": "^5.0",
+        "laravel/framework": "^12.0 || ^13.0",
+        "endroid/qr-code": "^5.0",
+        "setasign/fpdf": "^1.8.2",
+        "reachweb/statamic-resrv": "*"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "laravel/pint": "^1.2",
+        "laravel/boost": "^2.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Reach\\StatamicResrvVouchers\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Reach\\StatamicResrvVouchers\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test:stop": "vendor/bin/pest --stop-on-failure"
+    },
+    "extra": {
+        "statamic": {
+            "name": "Statamic Resrv Vouchers",
+            "description": "QR-code voucher generation, email delivery, and CP scanning for Statamic Resrv reservations."
+        },
+        "laravel": {
+            "providers": [
+                "Reach\\StatamicResrvVouchers\\StatamicResrvVouchersServiceProvider"
+            ]
+        }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../statamic-resrv"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "pixelfear/composer-dist-plugin": true
+        }
+    }
+}

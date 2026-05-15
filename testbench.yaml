@@ -1,0 +1,29 @@
+laravel: '@testbench'
+
+providers:
+  - Statamic\Providers\StatamicServiceProvider
+  - Livewire\LivewireServiceProvider
+  - Reach\StatamicResrv\StatamicResrvServiceProvider
+  - Reach\StatamicResrvVouchers\StatamicResrvVouchersServiceProvider
+
+env:
+  APP_ENV: local
+  APP_DEBUG: true
+  APP_KEY: base64:AckfSECXIvnK5r28GVIWUAxmbBSjTsmF1+ZHN1p+ueY=
+  DB_CONNECTION: sqlite
+  DB_DATABASE: ':memory:'
+  MAIL_MAILER: array
+  CACHE_DRIVER: array
+  SESSION_DRIVER: array
+  QUEUE_CONNECTION: sync
+  RESRV_VOUCHERS_SIGNING_KEY: testbench-signing-key
+
+workbench:
+  install: false
+  discovers:
+    web: false
+    api: false
+    commands: true
+    components: false
+    factories: false
+    views: false
