@@ -10,13 +10,15 @@ return new class extends Migration
     {
         Schema::create('resrv_voucher_scans', function (Blueprint $table) {
             $table->id();
-            $table->string('voucher_id')->index();
+            $table->string('voucher_id')->nullable();
             $table->string('user_id')->nullable();
             $table->string('action');
             $table->string('result');
             $table->string('ip_address')->nullable();
             $table->text('user_agent')->nullable();
             $table->timestamps();
+
+            $table->index(['voucher_id', 'action']);
         });
     }
 

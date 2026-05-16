@@ -17,6 +17,8 @@ class Voucher extends Model
 
     protected $guarded = [];
 
+    protected $hidden = ['token'];
+
     protected $casts = [
         'status' => VoucherStatus::class,
         'expires_at' => 'datetime',

@@ -19,9 +19,9 @@ class QrRenderer
             ->getString();
     }
 
-    public function pdf(Voucher $voucher): string
+    public function pdf(Voucher $voucher, ?string $pngBytes = null): string
     {
-        $pngBytes = $this->png($voucher->token);
+        $pngBytes ??= $this->png($voucher->token);
 
         $tmp = tempnam(sys_get_temp_dir(), 'voucher-qr-');
         file_put_contents($tmp, $pngBytes);

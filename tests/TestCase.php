@@ -2,13 +2,16 @@
 
 namespace Reach\StatamicResrvVouchers\Tests;
 
+use Facades\Statamic\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\LivewireServiceProvider;
 use MarcoRieser\Livewire\ServiceProvider as StatamicLivewireServiceProvider;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
+use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\StatamicResrvVouchersServiceProvider;
 use Statamic\Extend\Manifest;
 use Statamic\Facades\Collection;
@@ -30,6 +33,8 @@ abstract class TestCase extends OrchestraTestCase
 
         $this->withoutVite();
         $this->withoutExceptionHandling();
+
+        Version::shouldReceive('get')->andReturn('5.5.0');
 
         Site::setSites([
             'en' => [
@@ -115,6 +120,15 @@ abstract class TestCase extends OrchestraTestCase
         return $user;
     }
 
+    protected function signInUserWithoutResrvPermission()
+    {
+        $user = User::make();
+        $user->id(2)->email('plain@test.com');
+        $this->be($user);
+
+        return $user;
+    }
+
     protected function ensureCollectionExists(string $handle, string $route = '/{slug}'): \Statamic\Contracts\Entries\Collection
     {
         if ($existing = Collection::findByHandle($handle)) {
@@ -180,5 +194,13 @@ abstract class TestCase extends OrchestraTestCase
         $reservation->save();
 
         return $reservation->fresh();
+    }
+
+    protected function makeIssuedVoucher(): Voucher
+    {
+        $reservation = $this->makeConfirmedReservation();
+        ReservationConfirmed::dispatch($reservation);
+
+        return Voucher::query()->where('reservation_id', $reservation->id)->firstOrFail();
     }
 }

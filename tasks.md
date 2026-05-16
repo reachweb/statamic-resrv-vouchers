@@ -57,25 +57,25 @@
 
 Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `main` until the Vouchers addon is exercising it.
 
-- [ ] **T0.1 Add `BuildingReservationEmail` event class in Resrv**
+- [x] **T0.1 Add `BuildingReservationEmail` event class in Resrv**
   - File: `src/Events/BuildingReservationEmail.php`
   - Namespace: `Reach\StatamicResrv\Events`
   - Payload: `public Mailable $mailable; public ?Reservation $reservation;`
   - Use `Illuminate\Foundation\Events\Dispatchable`, `Illuminate\Queue\SerializesModels`.
   - **Self-check:** `vendor/bin/phpunit --filter "ReservationConfirmedTest"` still green.
 
-- [ ] **T0.2 Add `dispatchBuildingEvent()` to Resrv's Mailable base class**
+- [x] **T0.2 Add `dispatchBuildingEvent()` to Resrv's Mailable base class**
   - File: `src/Mail/Mailable.php`
   - Add `protected function dispatchBuildingEvent(?Reservation $reservation = null): void { BuildingReservationEmail::dispatch($this, $reservation); }`
   - Do **not** auto-call this from the base class — subclasses opt in.
   - **Self-check:** existing PHPUnit suite still green.
 
-- [ ] **T0.3 Wire the dispatcher into `ReservationConfirmed::build()`**
+- [x] **T0.3 Wire the dispatcher into `ReservationConfirmed::build()`**
   - File: `src/Mail/ReservationConfirmed.php`
   - Call `$this->dispatchBuildingEvent($this->reservation);` right before returning. The mailable already has its markdown set so listeners can `attach()` and inspect.
   - **Self-check:** existing email test still green.
 
-- [ ] **T0.4 PHPUnit test for the new event**
+- [x] **T0.4 PHPUnit test for the new event**
   - File: `tests/Mail/BuildingReservationEmailTest.php`
   - Two cases: (a) event fires exactly once when the mailable builds; (b) a listener can call `$event->mailable->attachData(...)` and the resulting `Mail::fake()` payload contains the attachment.
   - **Self-check:** new test passes; full PHPUnit suite green.
@@ -211,7 +211,7 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 
 ## Phase 5 — Voucher generation on `ReservationConfirmed`
 
-- [ ] **T5.1 `VoucherGenerator` service**
+- [x] **T5.1 `VoucherGenerator` service**
   - `src/Services/VoucherGenerator.php`
   - `generateFor(Reservation $reservation): Voucher`
   - Idempotent: if a voucher exists for this `reservation_id`, return it.
@@ -220,12 +220,12 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
   - Sets `expires_at = $reservation->date_end + grace_days`.
   - Signs the UUID via `VoucherTokenSigner` and stores `token`.
 
-- [ ] **T5.2 `GenerateVoucherForReservation` listener**
+- [x] **T5.2 `GenerateVoucherForReservation` listener**
   - `src/Listeners/GenerateVoucherForReservation.php`
   - Catches the `ShouldNotIssueVoucherException` (or just early-returns by checking collection eligibility before calling the generator — pick one approach and stay consistent).
   - Queueable (`implements ShouldQueue`) so it doesn't slow webhooks.
 
-- [ ] **T5.3 Wire listener**
+- [x] **T5.3 Wire listener**
   - In `VouchersProvider::$listen`:
     ```php
     \Reach\StatamicResrv\Events\ReservationConfirmed::class => [
@@ -233,7 +233,7 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
     ],
     ```
 
-- [ ] **T5.4 Feature tests**
+- [x] **T5.4 Feature tests**
   - `tests/Feature/VoucherGenerationTest.php`:
     - Confirming a reservation in an enabled collection creates one voucher with `status=Issued` and a valid signed token.
     - Re-firing the event does NOT create a duplicate (idempotency).
@@ -243,7 +243,7 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 
 ## Phase 6 — Email integration
 
-- [ ] **T6.1 `AttachVoucherToReservationEmail` listener**
+- [x] **T6.1 `AttachVoucherToReservationEmail` listener**
   - `src/Listeners/AttachVoucherToReservationEmail.php`
   - Listens to `\Reach\StatamicResrv\Events\BuildingReservationEmail`.
   - Resolves the voucher by `$event->reservation->id`. If none (e.g. collection not enabled), return.
@@ -251,11 +251,11 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
   - For the inline image, use `$event->mailable->withSymfonyMessage(function (\Symfony\Component\Mime\Email $email) use ($pngBytes) { $email->embed($pngBytes, 'voucher-qr', 'image/png'); });` so the markdown template can reference `<img src="cid:voucher-qr">`.
   - Make the listener **synchronous** (NOT queued) — it needs to mutate the mailable that's about to be sent.
 
-- [ ] **T6.2 Markdown partial for the QR image**
+- [x] **T6.2 Markdown partial for the QR image**
   - `resources/views/email/vouchers/partials/qr.blade.php` — a tiny snippet that the user (in a host app) can `@include('statamic-resrv-vouchers::email.vouchers.partials.qr')` from their published `statamic-resrv/email/reservations/confirmed.blade.php` to render the inline QR. Document this in README and in T11.2.
   - **Tradeoff acknowledged in plan:** The Resrv default confirmation template does not reference the QR. Hosts must publish the Resrv template and add the include. Until they do, the QR is still attached as PDF and the email still works.
 
-- [ ] **T6.3 Wire listener**
+- [x] **T6.3 Wire listener**
   - `VouchersProvider::$listen` gets:
     ```php
     \Reach\StatamicResrv\Events\BuildingReservationEmail::class => [
@@ -263,17 +263,17 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
     ],
     ```
 
-- [ ] **T6.4 Feature test for email attachment**
+- [x] **T6.4 Feature test for email attachment**
   - `tests/Feature/EmailAttachmentTest.php`
   - `Mail::fake()`, confirm a reservation, assert `\Reach\StatamicResrv\Mail\ReservationConfirmed` was sent with a PDF attachment matching `voucher-*.pdf` and the embedded `voucher-qr` CID.
   - Also assert the un-enabled-collection case sends the email WITHOUT any voucher attachment.
 
-- [ ] **T6.5 Cross-package sanity**
+- [x] **T6.5 Cross-package sanity**
   - Run Resrv's own PHPUnit suite (`cd ../statamic-resrv && vendor/bin/phpunit`) to confirm Phase 0 changes don't regress anything.
 
 ## Phase 7 — Lifecycle (cancel / refund / expired)
 
-- [ ] **T7.1 `VoucherStateMachine` service**
+- [x] **T7.1 `VoucherStateMachine` service**
   - `src/Services/VoucherStateMachine.php`
   - Methods:
     - `statusOf(Voucher $v): VoucherStatus` — lazy expiration check: if `$v->status === Issued && now > expires_at`, returns `Expired` (no DB write).
@@ -282,15 +282,15 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
     - `invalidate(Voucher $v, string $reason): void` — from any non-final state; dispatches `VoucherInvalidated`.
   - Wraps DB updates in a transaction.
 
-- [ ] **T7.2 `InvalidateVoucherOnCancellation` listener**
+- [x] **T7.2 `InvalidateVoucherOnCancellation` listener**
   - Listens to `\Reach\StatamicResrv\Events\ReservationCancelled`, `ReservationRefunded`, `ReservationExpired`.
   - Looks up the voucher, calls `VoucherStateMachine::invalidate($voucher, $reasonFromEventClass)`.
   - Skips silently if no voucher exists.
 
-- [ ] **T7.3 Lifecycle event classes**
+- [x] **T7.3 Lifecycle event classes**
   - `src/Events/VoucherUsed.php`, `VoucherUnmarked.php`, `VoucherInvalidated.php` — all carry the voucher (+ user id where applicable).
 
-- [ ] **T7.4 Feature tests**
+- [x] **T7.4 Feature tests**
   - `tests/Feature/CancellationInvalidatesVoucherTest.php`
   - Cancel → voucher status `Invalidated`, reason `cancelled`.
   - Refund → voucher status `Invalidated`, reason `refunded`.
@@ -299,7 +299,7 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 
 ## Phase 8 — CP routes, controllers, Blade
 
-- [ ] **T8.1 `routes/cp.php`**
+- [x] **T8.1 `routes/cp.php`**
   - All routes guarded `middleware('can:use resrv')`.
   - ```php
     Route::name('resrv-vouchers.')->prefix('resrv-vouchers')->group(function () {
@@ -313,7 +313,7 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
     });
     ```
 
-- [ ] **T8.2 `VoucherCpController`**
+- [x] **T8.2 `VoucherCpController`**
   - `src/Http/Controllers/VoucherCpController.php`
   - `indexCp()` → Blade `cp.vouchers.index`.
   - `index(Request $r)` → JSON listing, supports filters `collection`, `status`, pagination.
@@ -324,14 +324,14 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
   - `resend(Voucher $v)` — re-dispatch `\Reach\StatamicResrv\Mail\ReservationConfirmed` to the customer (our `AttachVoucherToReservationEmail` listener fires automatically). Audit-log a `resend` action.
   - All endpoints return JSON.
 
-- [ ] **T8.3 Blade views**
+- [x] **T8.3 Blade views**
   - `resources/views/cp/vouchers/index.blade.php` — `@extends('statamic::layout')`, mounts `<vouchers-list>`.
   - `resources/views/cp/vouchers/scan.blade.php` — `@extends('statamic::layout')`, mounts `<voucher-scanner>`.
 
-- [ ] **T8.4 CP nav**
+- [x] **T8.4 CP nav**
   - In `VouchersProvider::createNavigation()` (or boot), register a "Vouchers" item in the "Resrv" section with children "Scan" and "List", each `->can('use resrv')`. Mirror the pattern in `Reach\StatamicResrv\Providers\ResrvProvider::createNavigation()`.
 
-- [ ] **T8.5 Feature tests**
+- [x] **T8.5 Feature tests**
   - `tests/Feature/CpScanFlowTest.php`
   - Per endpoint: 200 on happy path, 403 without `use resrv`, 422 for malformed/invalid tokens.
   - Verify audit-log row inserted for lookup, mark-used, un-mark, resend.
@@ -472,3 +472,25 @@ T4.1 done 2026-05-15: VoucherTokenSigner — readonly key, sign() = base64url(uu
 T4.2 done 2026-05-15: tests/Unit/VoucherTokenSignerTest.php — round-trip, tamper, wrong-key, malformed, empty-key (throws), and two fromConfig() resolution paths. 7 passed.
 T4.3 done 2026-05-15: QrRenderer — png() via endroid v5 Builder + PngWriter; pdf() via FPDF (added setasign/fpdf ^1.8.2 to composer; A6 page size passed as [105,148] mm because FPDF doesn't recognise 'A6' string). Embeds the QR PNG centred + customer name + reference + date range. Reads customer name from Customer->data Collection (Resrv 2025-03 schema).
 T4.4 done 2026-05-15: tests/Unit/QrRendererTest.php — PNG signature byte check + %PDF- header check using a real Voucher attached to a makeConfirmedReservation(). Both green. Full suite: 17 passed (23 assertions). Pint clean.
+T0.1 done 2026-05-16: BuildingReservationEmail event class (Reach\StatamicResrv\Events) carrying Mailable + ?Reservation. Uses Dispatchable + SerializesModels.
+T0.2 done 2026-05-16: protected dispatchBuildingEvent(?Reservation) helper added to Resrv's Mail\Mailable base class. Subclasses opt-in.
+T0.3 done 2026-05-16: ReservationConfirmed::build() now calls $this->dispatchBuildingEvent($this->reservation) after setting markdown.
+T0.4 done 2026-05-16: tests/Mail/BuildingReservationEmailTest.php — event fires once when mailable builds; listener can mutate the mailable via attachData (verified through rawAttachments since Mail::fake() bypasses build()). Full Resrv PHPUnit suite: 804 tests, 2275 assertions, all green.
+T5.1 done 2026-05-16: VoucherGenerator service — idempotent on reservation_id; resolves collection via Reach\StatamicResrv\Models\Entry::whereItemId; throws ShouldNotIssueVoucherException when collection not in enabled_collections; expires_at = date_end + grace_days.
+T5.2 done 2026-05-16: GenerateVoucherForReservation listener (ShouldQueue) catches ShouldNotIssueVoucherException silently.
+T5.3 done 2026-05-16: VouchersProvider::$listen wires ReservationConfirmed → GenerateVoucherForReservation.
+T5.4 done 2026-05-16: tests/Feature/VoucherGenerationTest.php — 4 cases covering happy path, idempotency, disabled-collection, expires_at math. All green.
+T6.1 done 2026-05-16: AttachVoucherToReservationEmail synchronous listener attaches PDF via attachData and embeds PNG with cid 'voucher-qr' through withSymfonyMessage.
+T6.2 done 2026-05-16: resources/views/email/vouchers/partials/qr.blade.php published partial referencing cid:voucher-qr; resources/lang/en/email.php caption key.
+T6.3 done 2026-05-16: VouchersProvider::$listen wires BuildingReservationEmail → AttachVoucherToReservationEmail.
+T6.4 done 2026-05-16: tests/Feature/EmailAttachmentTest.php — verifies rawAttachments has voucher-{id}.pdf with %PDF- bytes and the withSymfonyMessage callback embeds cid voucher-qr. Disabled-collection case asserts empty rawAttachments.
+T6.5 done 2026-05-16: Full Resrv PHPUnit suite (804 tests / 2275 assertions) confirmed green after Phase 0 changes.
+T7.1 done 2026-05-16: VoucherStateMachine — statusOf lazy-expires Issued vouchers past expires_at without DB write; markUsed/unMark/invalidate wrap transitions in DB::transaction and dispatch corresponding events; throws InvalidVoucherTransitionException on illegal transitions.
+T7.2 done 2026-05-16: InvalidateVoucherOnCancellation listens to Cancelled/Refunded/Expired; resolves voucher; skips Used/Invalidated; reason derived from event class.
+T7.3 done 2026-05-16: VoucherUsed, VoucherUnmarked, VoucherInvalidated event classes (Dispatchable + SerializesModels).
+T7.4 done 2026-05-16: tests/Feature/CancellationInvalidatesVoucherTest.php (4 cases) + ExpirationTest.php (2 cases) — 6 tests, 12 assertions, all green.
+T8.1 done 2026-05-16: routes/cp.php — index/list/scan/lookup/mark-used/un-mark/resend, all gated by middleware('can:use resrv').
+T8.2 done 2026-05-16: VoucherCpController + LookupRequest + MarkUsedRequest. Each mutating endpoint audit-logs to resrv_voucher_scans with success / not-found / invalid-transition result; lookup returns status banner derived from VoucherStateMachine::statusOf.
+T8.3 done 2026-05-16: cp.vouchers.index.blade.php mounts <vouchers-list>; cp.vouchers.scan.blade.php mounts <voucher-scanner>. Both extend statamic::layout.
+T8.4 done 2026-05-16: VouchersProvider::createNavigation registers Vouchers under Resrv section with children List + Scan (each ->can('use resrv')).
+T8.5 done 2026-05-16: tests/Feature/CpScanFlowTest.php — 12 cases covering lookup/mark-used/un-mark/resend happy paths, 422 for invalid/missing token, 422 on illegal transition, 403 without 'use resrv', audit-log assertions, index/scan/list pages. Migration tweak: voucher_id on resrv_voucher_scans now nullable so 'not-found' results can be audit-logged. TestCase gained Statamic\Version stub + signInUserWithoutResrvPermission helper. Full pest suite: 42 tests / 71 assertions green; pint clean.
