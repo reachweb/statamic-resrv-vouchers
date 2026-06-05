@@ -34,3 +34,4 @@ _ide_helper.php
 .phpunit.cache
 .pest.cache
 .boost
+/tests/__fixtures__

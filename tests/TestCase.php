@@ -2,39 +2,34 @@
 
 namespace Reach\StatamicResrvVouchers\Tests;
 
-use Facades\Statamic\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\LivewireServiceProvider;
 use MarcoRieser\Livewire\ServiceProvider as StatamicLivewireServiceProvider;
-use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\StatamicResrvVouchersServiceProvider;
-use Statamic\Extend\Manifest;
+use Statamic\Addons\Manifest;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
-use Statamic\Providers\StatamicServiceProvider;
-use Statamic\Stache\Stores\UsersStore;
-use Statamic\Statamic;
 use Statamic\Support\Str;
+use Statamic\Testing\AddonTestCase;
 
-abstract class TestCase extends OrchestraTestCase
+abstract class TestCase extends AddonTestCase
 {
     use RefreshDatabase;
+
+    protected string $addonServiceProvider = StatamicResrvVouchersServiceProvider::class;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->withoutVite();
         $this->withoutExceptionHandling();
-
-        Version::shouldReceive('get')->andReturn('5.5.0');
 
         Site::setSites([
             'en' => [
@@ -48,61 +43,33 @@ abstract class TestCase extends OrchestraTestCase
 
     protected function getPackageProviders($app)
     {
-        return [
-            StatamicServiceProvider::class,
+        return array_merge(parent::getPackageProviders($app), [
             LivewireServiceProvider::class,
             StatamicLivewireServiceProvider::class,
             StatamicResrvServiceProvider::class,
-            StatamicResrvVouchersServiceProvider::class,
-        ];
-    }
-
-    protected function getPackageAliases($app)
-    {
-        return ['Statamic' => Statamic::class];
+        ]);
     }
 
     protected function getEnvironmentSetUp($app)
     {
         parent::getEnvironmentSetUp($app);
 
-        $app->make(Manifest::class)->manifest = [
+        $manifest = $app->make(Manifest::class);
+        $manifest->manifest = array_merge($manifest->manifest, [
             'reach/resrv' => [
                 'id' => 'reach/resrv',
+                'slug' => 'statamic-resrv',
+                'version' => 'dev-main',
                 'namespace' => 'Reach\\StatamicResrv',
+                'autoload' => 'src/',
+                'provider' => StatamicResrvServiceProvider::class,
             ],
-            'reach/resrv-vouchers' => [
-                'id' => 'reach/resrv-vouchers',
-                'namespace' => 'Reach\\StatamicResrvVouchers',
-            ],
-        ];
-    }
-
-    protected function resolveApplicationConfiguration($app)
-    {
-        parent::resolveApplicationConfiguration($app);
-
-        $statamicConfigs = [
-            'assets', 'cp', 'forms', 'routes', 'static_caching',
-            'stache', 'system', 'users',
-        ];
-
-        foreach ($statamicConfigs as $config) {
-            $app['config']->set("statamic.$config", require __DIR__."/../vendor/statamic/cms/config/{$config}.php");
-        }
+        ]);
 
         $app['config']->set('cache.default', 'array');
         $app['config']->set('session.driver', 'array');
         $app['config']->set('queue.default', 'sync');
         $app['config']->set('mail.default', 'array');
-
-        $app['config']->set('statamic.users.repository', 'file');
-        $app['config']->set('statamic.stache.watcher', false);
-        $app['config']->set('statamic.stache.stores.users', [
-            'class' => UsersStore::class,
-            'directory' => __DIR__.'/__fixtures__/users',
-        ]);
-
         $app['config']->set('statamic.editions.pro', true);
     }
 

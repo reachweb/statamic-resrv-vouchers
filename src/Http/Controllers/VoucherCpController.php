@@ -7,6 +7,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
@@ -24,14 +26,26 @@ class VoucherCpController extends Controller
         private readonly VoucherStateMachine $stateMachine,
     ) {}
 
-    public function indexCp()
+    public function indexCp(): InertiaResponse
     {
-        return view('statamic-resrv-vouchers::cp.vouchers.index');
+        return Inertia::render('resrv-vouchers::Vouchers/Index', [
+            'listUrl' => cp_route('resrv-vouchers.index.json'),
+            'resendUrl' => cp_route('resrv-vouchers.resend', ['voucher' => '__id__']),
+            'statuses' => collect(VoucherStatus::cases())->map(fn (VoucherStatus $s) => [
+                'value' => $s->value,
+                'label' => __(ucfirst($s->value)),
+            ])->all(),
+            'defaultPerPage' => 25,
+        ]);
     }
 
-    public function scanCp()
+    public function scanCp(): InertiaResponse
     {
-        return view('statamic-resrv-vouchers::cp.vouchers.scan');
+        return Inertia::render('resrv-vouchers::Vouchers/Scan', [
+            'lookupUrl' => cp_route('resrv-vouchers.lookup'),
+            'markUsedUrl' => cp_route('resrv-vouchers.mark-used'),
+            'unMarkUrl' => cp_route('resrv-vouchers.un-mark'),
+        ]);
     }
 
     public function index(Request $request): JsonResponse

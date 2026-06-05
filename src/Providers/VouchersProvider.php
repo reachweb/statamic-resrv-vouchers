@@ -7,9 +7,12 @@ use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrvVouchers\Console\Commands\InstallVouchers;
+use Reach\StatamicResrvVouchers\Events\VoucherUsed;
 use Reach\StatamicResrvVouchers\Listeners\AttachVoucherToReservationEmail;
 use Reach\StatamicResrvVouchers\Listeners\GenerateVoucherForReservation;
 use Reach\StatamicResrvVouchers\Listeners\InvalidateVoucherOnCancellation;
+use Reach\StatamicResrvVouchers\Listeners\SendAttendedEmailOnVoucherUsed;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
 use Statamic\Facades\CP\Nav;
 use Statamic\Providers\AddonServiceProvider;
@@ -18,6 +21,19 @@ class VouchersProvider extends AddonServiceProvider
 {
     protected $routes = [
         'cp' => __DIR__.'/../../routes/cp.php',
+    ];
+
+    protected $vite = [
+        'input' => [
+            'resources/js/cp.js',
+            'resources/css/cp.css',
+        ],
+        'publicDirectory' => 'resources/dist',
+        'hotFile' => __DIR__.'/../../resources/dist/hot',
+    ];
+
+    protected $commands = [
+        InstallVouchers::class,
     ];
 
     protected $listen = [
@@ -36,6 +52,9 @@ class VouchersProvider extends AddonServiceProvider
         ReservationExpired::class => [
             InvalidateVoucherOnCancellation::class,
         ],
+        VoucherUsed::class => [
+            SendAttendedEmailOnVoucherUsed::class,
+        ],
     ];
 
     public function register(): void
@@ -45,10 +64,8 @@ class VouchersProvider extends AddonServiceProvider
         $this->app->singleton(VoucherTokenSigner::class, fn () => VoucherTokenSigner::fromConfig());
     }
 
-    public function boot(): void
+    public function bootAddon(): void
     {
-        parent::boot();
-
         $this->loadTranslationsFrom(__DIR__.'/../../resources/lang', 'statamic-resrv-vouchers');
 
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'statamic-resrv-vouchers');
@@ -60,6 +77,14 @@ class VouchersProvider extends AddonServiceProvider
         $this->publishes([
             __DIR__.'/../../config/resrv-vouchers.php' => config_path('resrv-vouchers.php'),
         ], 'resrv-vouchers-config');
+
+        $this->publishes([
+            __DIR__.'/../../resources/views/email' => resource_path('views/vendor/statamic-resrv-vouchers/email'),
+        ], 'resrv-vouchers-emails');
+
+        $this->publishes([
+            __DIR__.'/../../resources/lang' => lang_path('vendor/statamic-resrv-vouchers'),
+        ], 'resrv-vouchers-language');
 
         $this->createNavigation();
     }

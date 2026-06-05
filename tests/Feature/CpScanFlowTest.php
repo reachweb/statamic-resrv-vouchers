@@ -4,6 +4,7 @@ namespace Reach\StatamicResrvVouchers\Tests\Feature;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Models\VoucherScan;
@@ -118,10 +119,36 @@ it('returns 200 for the CP index page', function () {
     $this->get(cp_route('resrv-vouchers.index'))->assertOk();
 });
 
+it('renders the CP index page as Inertia with list bootstrap props', function () {
+    $this->signInAdmin();
+
+    $this->get(cp_route('resrv-vouchers.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('resrv-vouchers::Vouchers/Index')
+            ->where('listUrl', cp_route('resrv-vouchers.index.json'))
+            ->where('defaultPerPage', 25)
+            ->has('statuses', count(VoucherStatus::cases()))
+        );
+});
+
 it('returns 200 for the CP scan page', function () {
     $this->signInAdmin();
 
     $this->get(cp_route('resrv-vouchers.scan'))->assertOk();
+});
+
+it('renders the CP scan page as Inertia with mutation URLs as props', function () {
+    $this->signInAdmin();
+
+    $this->get(cp_route('resrv-vouchers.scan'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('resrv-vouchers::Vouchers/Scan')
+            ->where('lookupUrl', cp_route('resrv-vouchers.lookup'))
+            ->where('markUsedUrl', cp_route('resrv-vouchers.mark-used'))
+            ->where('unMarkUrl', cp_route('resrv-vouchers.un-mark'))
+        );
 });
 
 it('lists vouchers as JSON', function () {
