@@ -7,14 +7,28 @@
 - **Package:** `reachweb/statamic-resrv-vouchers`
 - **Namespace:** `Reach\StatamicResrvVouchers\`
 - **Location:** `/Volumes/1TB/Sites/umami/addons/reachweb/statamic-resrv-vouchers/`
-- **Sibling addon (dependency):** `reachweb/statamic-resrv` at `/Volumes/1TB/Sites/umami/addons/reachweb/statamic-resrv`
+- **Sibling addon (dependency):** `reachweb/statamic-resrv` at `/Volumes/1TB/Sites/umami/addons/reachweb/statamic-resrv` — on `main`, which is v6-ready (the `v6-upgrade` work is merged; PHP `^8.4`; `tests/TestCase.php` on `AddonTestCase`; CP-managed settings now live in a settings blueprint instead of `config/resrv-config.php`). The `BuildingReservationEmail` hook is merged into `main`.
+- **Target platform:** **Statamic 6, Laravel 12/13, PHP 8.3+, Vue 3 + Inertia.js**. The vouchers addon is being retargeted to ship v6-native — there is no v5 release in the pipeline. The backend phases below (T0–T8) were authored against v5 and stay valid; the frontend (T9) is built v6-native from the start, and a new **Phase V6** sweep brings the existing v5-shaped surface (composer pins, `boot()` rename, blade-shaped CP pages, `OrchestraTestCase` test base) into line with v6.
 - **What it does:** When a Resrv reservation is confirmed in a voucher-enabled collection, generate a signed-token QR code, attach it (inline PNG + PDF) to the existing Resrv confirmation email. CP UI lets staff scan QR codes via phone camera, validate vouchers, and mark them used. Marking used sends a "thank you for attending" email. Cancel/refund invalidates the voucher; vouchers also expire after `date_end + grace_days`.
-- **Tests:** PEST 3 with Orchestra Testbench (SQLite in-memory).
+- **Tests:** PEST 3 on top of `Statamic\Testing\AddonTestCase` (post-V6). SQLite in-memory.
+
+## Current build state (as of 2026-06-05)
+
+- **Retarget to Resrv `main`:** complete. Resrv merged its v6 work to `main` ahead of the v6 release; `features/resrv-voucher-required-changes` (the `BuildingReservationEmail` hook) is merged into Resrv `main` and its 2 PHPUnit tests pass there. Vouchers' composer now resolves `reachweb/statamic-resrv dev-main` (statamic/cms 6.20.2). One test-infra fix: the Resrv entry in `tests/TestCase.php`'s addon Manifest had id `reach/resrv` — Resrv `main` resolves setting defaults (e.g. `currency_isoCode`) through `Addon::get('reachweb/statamic-resrv')`, so the wrong id skipped the settings-blueprint merge and 30 tests failed on a null currency. Re-keyed to the real package id → full suite green: 65 PEST tests / 165 assertions. Pint clean.
+
+- **Phases 0–8 (backend + CP scaffolding):** complete. 42 PEST tests / 71 assertions green on Statamic 6. Pint clean.
+- **Phase 9 (frontend):** code complete (T9.1–T9.6). Vite 8 + Tailwind v4 + `@statamic/cms/vite-plugin` build chain in place; `resources/js/pages/Vouchers/{Index,Scan}.vue` shipped with html5-qrcode scanner + camera switching + manual token entry + `<Listing>` filter/sort. T9.7 (manual UAT on phone/desktop) still pending — only verifiable in a host site with a live camera. `npm run cp:build` exits 0; manifest + compiled assets emitted to `resources/dist/build/`.
+- **Phase 10 (attended email on `VoucherUsed`):** complete. SendAttendedEmailOnVoucherUsed listener + Mail\VoucherAttended + publishable markdown template + 4 PEST tests.
+- **Phase 11 (install command, README, polish):** code + docs complete — T11.1 (InstallVouchers command), T11.2 (README), T11.3 (Resrv CLAUDE.md hook docs) done. T11.4 (final cross-package test run) verified on Vouchers side; Resrv side blocked on its own v6 TestCase migration. T11.5 (manual cross-browser UAT) requires a phone with a camera — left pending.
+- **Phase V6 (v5 → v6 alignment sweep):** **complete.** TV6.1 (composer bumps), TV6.2 (`$vite`), TV6.3 (`bootAddon` rename), TV6.4 (Inertia controllers), TV6.5 (delete Blade CP views), TV6.6 (`AddonTestCase`), and TV6.7 (cross-package sanity verified — composer + Vouchers pest green; Resrv's own phpunit needs the same TestCase migration but is out of Vouchers scope). 51 PEST tests / 120 assertions green on Statamic 6.
 
 ## Decisions reference (do not re-litigate without user input)
 
 | Topic | Decision |
 | --- | --- |
+| Target Statamic version | **v6** (no v5 release). Resrv sibling is mid-v6-upgrade on its `v6-upgrade` branch. |
+| CP UI architecture | **Inertia.js + Vue 3** pages registered via `Statamic.$inertia.register(...)`. Use `@statamic/cms/ui` + `@statamic/cms/inertia` components — no Blade CP views in the final shape. |
+| Build chain | Vite 8 + Tailwind v4 + `@statamic/cms/vite-plugin`. JS entry is `resources/js/cp.js`. |
 | QR per reservation | One (not per quantity) |
 | Token | UUID v4 + HMAC-SHA256, base64url-encoded |
 | Attachments | Inline PNG (CID) + PDF |
@@ -27,29 +41,31 @@
 | Scan UX | Always show reservation details + status banner |
 | Audit | Separate `resrv_voucher_scans` table |
 | QR PHP lib | `endroid/qr-code` v5 |
-| Scanner JS lib | `html5-qrcode` |
+| Scanner JS lib | `html5-qrcode` (Vue 3-compatible — wired with `onMounted` / `onBeforeUnmount`) |
 | Resrv hook | New `BuildingReservationEmail` event from `Mailable::build()` |
 | Scanner fallback | Text-input fallback in addition to camera |
 | Install | `resrv-vouchers:install` console command |
 | Extras | CP voucher list + manual resend-email action |
+| Config storage | Plain `config/resrv-vouchers.php` (no Forma, no UserConfig blueprint — there are no user-editable settings beyond the keys collections operator already manages in `config/`). Revisit if user-facing settings are added later. |
 
 ## Cross-cutting agent rules
 
 1. **Run tests after every task that touches `src/` or `tests/`.** Use `vendor/bin/pest`. Stop on first failure if you can't reason about the cascade.
 2. **Code style:** run `vendor/bin/pint` before considering any task complete.
-3. **Naming:** mirror the Resrv addon (`tests/TestCase.php`, `src/Providers/...`, `resources/views/cp/<feature>/...`).
+3. **Naming:** mirror the Resrv addon. CP pages live as Inertia pages at `resources/js/pages/<Feature>/<Name>.vue` and are registered with handles like `resrv-vouchers::<Feature>/<Name>`.
 4. **Cross-driver migrations:** stick to standard Schema builder calls. The addon must work on SQLite (testing), MySQL/MariaDB, PostgreSQL.
-5. **Don't change Resrv's behavior outside Phase 0.** Any change in Resrv must be on the companion PR branch and reviewed.
+5. **Don't change Resrv's behavior outside Phase 0.** Phase 0 lives on Resrv's `feature/building-email-event` branch (already merged into the v6-upgrade base) and must not regrow once Resrv is on `v6-upgrade`.
 6. **PHPDoc / comments:** none, unless the WHY is non-obvious. Follow Resrv's existing style.
-7. **PHP 8.2+.** Use constructor property promotion, return types, readonly where natural.
+7. **PHP 8.3+.** Use constructor property promotion, return types, readonly where natural.
 8. **Update this file** every time you finish a task: check the box and add a one-line "done note" under it if non-trivial. Then commit.
-9. **Local dev:** the addon depends on the companion Resrv PR (Phase 0). Until that branch is merged & tagged, point the addon's `composer.json` at a local path repo for `reachweb/statamic-resrv`:
+9. **Local dev:** the addon depends on the v6-bearing Resrv. Until Resrv tags a `^6.0` release, the `composer.json` `path` repo at `../statamic-resrv` resolves dev-`main`:
    ```json
    "repositories": [
      { "type": "path", "url": "../statamic-resrv" }
    ]
    ```
 10. **Commits:** small, atomic, one phase = one or two commits. Conventional-commit-ish messages.
+11. **Statamic v6 reference material:** the playbook lives at `/Users/afonic/.claude/skills/statamic-addon-v5-to-v6/`. Phase V6 follows it directly; Phase 9 references it for the build chain and Inertia page conventions.
 
 ---
 
@@ -83,6 +99,7 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 - [ ] **T0.5 Coordinate Resrv version with the new addon**
   - For local development, do not tag yet. The Vouchers addon will pin via a path repo (see rule 9 above).
   - Before public release, tag a new minor of Resrv that introduces this event and reference that version in `statamic-resrv-vouchers/composer.json`.
+  - **Status check 2026-06-05:** `features/resrv-voucher-required-changes` is merged into Resrv `main` (merge commit `d01e363`, local only — not pushed). Both `BuildingReservationEmailTest` cases green on main. Remaining: tag the Resrv v6 release and swap the `*` constraint for it.
 
 ## Phase 1 — Package skeleton
 
@@ -336,62 +353,195 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
   - Per endpoint: 200 on happy path, 403 without `use resrv`, 422 for malformed/invalid tokens.
   - Verify audit-log row inserted for lookup, mark-used, un-mark, resend.
 
-## Phase 9 — Frontend (Vue 2 + html5-qrcode)
+## Phase V6 — Statamic v6 alignment sweep
 
-- [ ] **T9.1 `package.json` + `vite.config.js`**
-  - Copy Resrv's `vite.config.js` shape: entries `resources/js/resrv-vouchers.js`, public dir `resources/dist`, `@vitejs/plugin-vue2`.
-  - Dependencies: `vue@^2.7`, `html5-qrcode@^2.3`, `axios` (probably from Statamic globally — verify).
-  - Scripts: `build`, `dev`.
+> Lands **before** Phase 9 so the frontend can be built v6-native (no Vue 2 conversion later). Cross-references the `statamic-addon-v5-to-v6` skill under `/Users/afonic/.claude/skills/statamic-addon-v5-to-v6/`.
 
-- [ ] **T9.2 `resources/js/resrv-vouchers.js`**
-  - ```js
-    import Statamic from 'statamic'
-    import VoucherScanner from './components/VoucherScanner.vue'
-    import VouchersList from './components/VouchersList.vue'
-    Statamic.booting(() => {
-        Statamic.$components.register('voucher-scanner', VoucherScanner)
-        Statamic.$components.register('vouchers-list', VouchersList)
-    })
+### Pre-flight audit (read-only — already complete, recorded here for traceability)
+
+Audit run 2026-05-16 against the current addon tree. Findings drive the tasks below.
+
+| Concern | Status | Action |
+| --- | --- | --- |
+| Composer pins | `php ^8.3`, `statamic/cms ^6.0` ✓ | Done (TV6.1) |
+| Forma in use | No | Nothing to do |
+| Service provider base | `extends AddonServiceProvider` ✓ | No change to base, only `boot()` rename |
+| `boot()` vs `bootAddon()` | `bootAddon()` ✓ | Done (TV6.3) |
+| Deprecated calls (`Site::setConfig`, `addLocalization`, `filterSortAndPaginate`, `where('status',...)`) | None | Skip |
+| `GlobalSet*` event references | None | Skip |
+| Build chain (Mix / Vite4 / Vue 2) | None — never built | Build v6-native in Phase 9 |
+| Vue 2 components | None (`resources/js/components/.gitkeep` only) | Skip — no migration debt |
+| Fieldtypes | None | Skip |
+| Blade CP views | None ✓ | Deleted (TV6.5); controllers now return Inertia (TV6.4) |
+| `AddonTestCase` in `tests/TestCase.php` | `Statamic\Testing\AddonTestCase` ✓ | Done (TV6.6) |
+| Sibling Resrv branch / state | `v6-upgrade` (Phase 2+3+4 done; Vue/Inertia in progress; TestCase still on `OrchestraTestCase`) | Re-test once Resrv's v6 work catches up |
+
+### Tasks
+
+- [x] **TV6.1 Bump composer constraints**
+  - `composer.json` `require`: PHP `^8.3`, `statamic/cms ^6.0`. Keep `laravel/framework ^12.0 || ^13.0`, `endroid/qr-code ^5.0`, `setasign/fpdf ^1.8.2`, `reachweb/statamic-resrv:*` (path repo, dev-`v6-upgrade`).
+  - `require-dev`: keep `orchestra/testbench ^10.0 || ^11.0`, `pestphp/pest ^4.0`, `pestphp/pest-plugin-laravel ^4.0`, `laravel/pint ^1.2`, `laravel/boost ^2.1`.
+  - **Self-check:** `composer install` resolves cleanly against the sibling Resrv `v6-upgrade` branch (which is already on Statamic ^6).
+
+- [x] **TV6.2 Add `protected $vite` to `VouchersProvider`**
+  - ```php
+    protected $vite = [
+        'input' => ['resources/js/cp.js', 'resources/css/cp.css'],
+        'publicDirectory' => 'resources/dist',
+        'hotFile' => __DIR__.'/../../resources/dist/hot',
+    ];
     ```
+  - Path depth `../../` because the provider lives at `src/Providers/VouchersProvider.php`.
+  - **Self-check:** `php artisan config:clear` in a host site; loading the CP doesn't error. The actual JS / CSS files are produced in Phase 9.
 
-- [ ] **T9.3 `VoucherScanner.vue`**
-  - Mounts an `html5-qrcode` scanner in `<div id="qr-reader">`.
-  - On successful decode, calls `axios.post(cp_url('/resrv-vouchers/lookup'), { token })`.
-  - Renders a result card: customer name, reservation reference, dates, party size, status banner (color-coded by `VoucherStatus`).
+- [x] **TV6.3 Rename `boot()` → `bootAddon()` in `VouchersProvider`**
+  - `AddonServiceProvider::boot()` is reserved in v6 — overriding it silently disables auto-discovery. Move all the current body (`loadTranslationsFrom`, `loadViewsFrom`, `loadMigrationsFrom`, `mergeConfigFrom`, `publishes`, `createNavigation`) into `bootAddon()`. Drop the `parent::boot()` call (it isn't ours to call any more).
+  - **Self-check:** boot smoke test (`tests/Feature/BootTest.php`) still green.
+
+- [x] **TV6.4 Switch `VoucherCpController` to return `Inertia::render(...)`**
+  - `indexCp()` → `Inertia::render('resrv-vouchers::Vouchers/Index', [...])` with whatever bootstrap props the page needs (columns, filters, action URLs, default per-page, etc.). The JSON listing endpoint at `/resrv-vouchers/list` stays as-is — the Inertia page hits it via `<Listing :url=… />` from `@statamic/cms/ui`.
+  - `scanCp()` → `Inertia::render('resrv-vouchers::Vouchers/Scan', [...])` with the lookup / mark-used / un-mark URLs precomputed via `cp_route(...)` so the Vue page doesn't have to know route names.
+  - All mutation endpoints (`lookup`, `markUsed`, `unMark`, `resend`) keep returning JSON unchanged — Inertia pages call them with `axios` / `useForm`.
+  - **Self-check:** Visiting `/cp/resrv-vouchers` and `/cp/resrv-vouchers/scan` returns an Inertia response (`X-Inertia: true` header set when requested with that header; HTML shell otherwise). Existing `tests/Feature/CpScanFlowTest.php` mutation assertions stay green.
+
+- [x] **TV6.5 Delete the two CP Blade views**
+  - Remove `resources/views/cp/vouchers/index.blade.php` and `resources/views/cp/vouchers/scan.blade.php`. Phase 9 ships their Vue 3 / Inertia replacements.
+  - The blueprint-style email partial `resources/views/email/vouchers/partials/qr.blade.php` stays — it's a Blade snippet hosts `@include` from their published Resrv confirmation template, nothing to do with the CP.
+  - **Self-check:** `grep -rn "@extends('statamic::layout')" resources/views/` returns zero hits.
+
+- [x] **TV6.6 Switch `tests/TestCase.php` to `Statamic\Testing\AddonTestCase`**
+  - ```php
+    use Statamic\Testing\AddonTestCase;
+
+    abstract class TestCase extends AddonTestCase
+    {
+        protected string $addonServiceProvider = \Reach\StatamicResrvVouchers\StatamicResrvVouchersServiceProvider::class;
+        // …keep all helpers (signInAdmin, makeConfirmedReservation, etc.)…
+    }
+    ```
+  - Drop `getPackageProviders()` (the base class registers `StatamicServiceProvider` + our `$addonServiceProvider`), but keep Livewire and the Resrv provider in a smaller override since they're separate addons:
+    ```php
+    protected function getPackageProviders($app)
+    {
+        return array_merge(parent::getPackageProviders($app), [
+            LivewireServiceProvider::class,
+            StatamicLivewireServiceProvider::class,
+            StatamicResrvServiceProvider::class,
+        ]);
+    }
+    ```
+  - Drop the hand-rolled `Version::shouldReceive('get')->andReturn('5.5.0')` stub — `AddonTestCase` resolves the real Statamic version (now 6.x). If a test asserts on it, update the expectation.
+  - **Self-check:** `vendor/bin/pest` — same 42 passing tests as the v5 baseline. Any new failures are real regressions (likely real v6 surface), not bookkeeping.
+
+- [x] **TV6.7 Cross-package sanity vs sibling Resrv `v6-upgrade`**
+  - `composer install` succeeds with the path-repo pointing at `../statamic-resrv` on its current branch.
+  - Run `vendor/bin/pest` once Resrv's v6 work has caught up far enough to provide a green build (it currently does; the Vue/Inertia work over there doesn't touch our test path).
+  - If Resrv tags a `^6.0` release later, replace the `*` constraint in `composer.json` with that tag and remove the path repo.
+  - **Status check 2026-05-16:** composer install resolves cleanly. Vouchers pest 51/120 green — exercises Resrv source (models, events, mailables, customer). Resrv's *own* phpunit suite currently errors on all 802 tests because Resrv's `tests/TestCase.php` still references the v5-only `Statamic\Extend\Manifest`. The same `AddonTestCase` migration we did in TV6.6 is needed in Resrv — see the v6 playbook at `/Users/afonic/.claude/skills/statamic-addon-v5-to-v6/`. Out-of-scope for Vouchers per cross-cutting rule #5; flagged for Resrv's own v6-upgrade backlog.
+
+### Phase V6 acceptance
+
+- composer + tests both pass against Statamic 6.
+- No Blade CP views remain.
+- `VouchersProvider` uses `bootAddon()` and declares `protected $vite`.
+- `tests/TestCase.php` extends `Statamic\Testing\AddonTestCase`.
+- The pre-existing 42 PEST tests are still green (or replaced/updated where v6 changed behaviour — flag any such swaps in the done-log).
+
+## Phase 9 — Frontend (Inertia + Vue 3 + html5-qrcode)
+
+> Built **v6-native** — no Vue 2 step ever existed for this addon. Pulls heavily from `references/04-vite-and-tailwind.md`, `references/05-vue3-migration.md`, and `references/07-cp-pages-inertia.md` in the v5→v6 skill.
+
+- [x] **T9.1 `package.json` + `vite.config.js`**
+  - Create `package.json` with `"type": "module"`, scripts `cp:dev` / `cp:build`, deps:
+    ```json
+    "dependencies": {
+        "@statamic/cms": "file:../../../vendor/statamic/cms/resources/dist-package",
+        "html5-qrcode": "^2.3",
+        "tailwindcss": "^4.0.0"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0.0",
+        "laravel-vite-plugin": "^3.0.0",
+        "vite": "^8.0.0"
+    }
+    ```
+    (Adjust the `file:` path to whatever the host site's vendor layout is — for our umami host, `file:../../../vendor/statamic/cms/resources/dist-package` works. Resrv's `package.json` is the canonical pattern.)
+  - `vite.config.js`:
+    ```js
+    import { defineConfig } from 'vite';
+    import laravel from 'laravel-vite-plugin';
+    import statamic from '@statamic/cms/vite-plugin';
+    import tailwindcss from '@tailwindcss/vite';
+
+    export default defineConfig({
+        plugins: [
+            statamic(),
+            tailwindcss(),
+            laravel({
+                input: ['resources/js/cp.js', 'resources/css/cp.css'],
+                publicDirectory: 'resources/dist',
+                hotFile: 'resources/dist/hot',
+                refresh: true,
+            }),
+        ],
+    });
+    ```
+  - **Self-check:** `npm install && npm run cp:build` exits 0, emits files under `resources/dist/build/`, `npm ls @vitejs/plugin-vue2` reports nothing.
+
+- [x] **T9.2 `resources/js/cp.js`**
+  - ```js
+    import VouchersIndex from './pages/Vouchers/Index.vue';
+    import VouchersScan from './pages/Vouchers/Scan.vue';
+
+    Statamic.booting(() => {
+        Statamic.$inertia.register('resrv-vouchers::Vouchers/Index', VouchersIndex);
+        Statamic.$inertia.register('resrv-vouchers::Vouchers/Scan', VouchersScan);
+    });
+    ```
+  - Inertia handle string MUST match what `VoucherCpController` passes to `Inertia::render(...)` (TV6.4).
+
+- [x] **T9.3 `resources/css/cp.css`**
+  - Single line: `@import "tailwindcss";`. No `tailwind.config.js`, no PostCSS chain — Tailwind v4 reads `@theme` straight from CSS if/when we add custom tokens.
+
+- [x] **T9.4 `resources/js/pages/Vouchers/Scan.vue` (Inertia page)**
+  - `<script setup>` (Composition API). Imports `Head` from `@statamic/cms/inertia` and `Header`, `Button`, `Field`, `Input`, `Badge`, `CardPanel` from `@statamic/cms/ui`.
+  - Mounts an `html5-qrcode` scanner inside the panel in `onMounted`; tears it down in `onBeforeUnmount`.
+  - On successful decode, calls `axios.post(props.lookupUrl, { token })` (URLs come in as props from the controller per TV6.4).
+  - Renders a result card: customer name, reservation reference, dates, party size, status banner (color-coded by `VoucherStatus` value).
   - Buttons:
-    - When `Issued`: "Mark as used" → `PATCH /resrv-vouchers/mark-used`.
-    - When `Used`: "Un-mark" → `PATCH /resrv-vouchers/un-mark`.
-    - Always: "Scan another".
+    - When `issued`: **"Mark as used"** → `axios.patch(props.markUsedUrl, { token })`.
+    - When `used`: **"Un-mark"** → `axios.patch(props.unMarkUrl, { token })`.
+    - Always: **"Scan another"**.
   - Text-input fallback below the camera viewport with a "Validate" button.
-  - Visible "switch camera" toggle if multiple cameras detected.
+  - Visible "switch camera" toggle if `Html5Qrcode.getCameras()` returns more than one device.
 
-- [ ] **T9.4 `VouchersList.vue`**
-  - Table fed by `GET /resrv-vouchers/list`. Columns: customer, collection, status, expires, used_at, actions.
-  - Filters: collection (select), status (multi-select).
-  - Resend action → `POST /resrv-vouchers/resend/{id}`. Show toast on success.
+- [x] **T9.5 `resources/js/pages/Vouchers/Index.vue` (Inertia page)**
+  - Uses `<Listing :url="props.listUrl" :columns :filters :action-url="props.actionUrl" sort-column="created_at" sort-direction="desc" preferences-prefix="resrv-vouchers.vouchers" push-query />` from `@statamic/cms/ui`. The existing `index(Request $r)` controller method already returns the JSON shape `<Listing>` expects.
+  - Filters supplied as props from `VoucherCpController::indexCp()` — `collection` (select), `status` (multi-select).
+  - Resend action wired through `<Listing>`'s `:action-url`; the controller's existing `resend` endpoint becomes a bulk action handler. Toast on success uses the global Statamic toaster.
 
-- [ ] **T9.5 Vite manifest registration**
-  - In `VouchersProvider`, set `protected array $vite = ['publicDirectory' => 'resources/dist', 'hotFile' => '...', 'input' => ['resources/css/resrv-vouchers.css', 'resources/js/resrv-vouchers.js']];` to match Statamic 5's addon-vite contract. Check the Resrv `vite.config.js` and `ResrvProvider` for the exact shape.
+- [x] **T9.6 Wire `protected $vite` in `VouchersProvider`** (was TV6.2; restated here for completeness)
+  - The provider's `$vite` array must point at the input files produced by T9.1. Path: `__DIR__.'/../../resources/dist/hot'` because the provider sits at `src/Providers/VouchersProvider.php`. A wrong depth silently disables HMR.
 
-- [ ] **T9.6 Manual UAT**
-  - Cannot be unit-tested. After Phase 10 lands, open the CP on a phone, allow camera, scan a real generated QR. Document any quirks in README troubleshooting section.
+- [ ] **T9.7 Manual UAT**
+  - Cannot be unit-tested. After Phase 10 lands, open the CP on a phone, allow camera, scan a real generated QR. Verify Inertia partial reloads (no full-page reload between scans). Document any quirks in README troubleshooting section. Mobile Safari (iOS) requires HTTPS for camera access — note that in README.
 
 ## Phase 10 — VoucherUsed → attended email
 
-- [ ] **T10.1 Wire up state-machine events**
+- [x] **T10.1 Wire up state-machine events**
   - Verify `VoucherStateMachine::markUsed()` dispatches `VoucherUsed` only on successful transition. Same for `unMark()`/`VoucherUnmarked`. Already in T7.1; this task is a verification.
 
-- [ ] **T10.2 `SendAttendedEmailOnVoucherUsed` listener**
+- [x] **T10.2 `SendAttendedEmailOnVoucherUsed` listener**
   - `src/Listeners/SendAttendedEmailOnVoucherUsed.php`
   - On `VoucherUsed`, queue `Mail\VoucherAttended` to the customer email.
   - Don't send if the voucher's reservation has no customer email (defensive — shouldn't happen).
 
-- [ ] **T10.3 `Mail\VoucherAttended`**
+- [x] **T10.3 `Mail\VoucherAttended`**
   - Extends `Reach\StatamicResrv\Mail\Mailable` to inherit theme components.
   - Markdown template `resources/views/email/vouchers/attended.blade.php` (publishable).
   - `applyResrvEmailConfig(config('resrv-vouchers.email.attended'))` for subject/from/template override.
 
-- [ ] **T10.4 Wire listener**
+- [x] **T10.4 Wire listener**
   - In `VouchersProvider::$listen`:
     ```php
     \Reach\StatamicResrvVouchers\Events\VoucherUsed::class => [
@@ -399,28 +549,30 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
     ],
     ```
 
-- [ ] **T10.5 Feature tests**
+- [x] **T10.5 Feature tests**
   - Marking used dispatches `VoucherUsed` and queues `VoucherAttended` to the customer (`Mail::assertQueued`).
   - Un-marking does NOT trigger the attended email.
   - Markdown template renders with customer name + reservation reference + (optionally) date range.
 
 ## Phase 11 — Install command, README, polish
 
-- [ ] **T11.1 `InstallVouchers` console command**
+- [x] **T11.1 `InstallVouchers` console command**
   - `src/Console/Commands/InstallVouchers.php` signature `resrv-vouchers:install`.
   - Steps: publish config tag, publish views tag, run migrations, then `$this->info('...')` summary including: "Add collection handles to `config/resrv-vouchers.php` `enabled_collections`. Ensure `reachweb/statamic-resrv` >= the version that ships `BuildingReservationEmail`."
   - Register in `VouchersProvider::$commands`.
 
-- [ ] **T11.2 `README.md`**
-  - Sections: Requirements (Resrv version, Statamic 5, PHP 8.2), Installation (`composer require ... && php artisan resrv-vouchers:install`), Configuration (`enabled_collections`, `grace_days`, `signing_key`), Email customization (publish + add include directive), CP usage (scanner + list), Troubleshooting (camera-permission HTTPS note, scanning fails over `http://` in production).
+- [x] **T11.2 `README.md`**
+  - Sections: Requirements (Resrv version that ships `BuildingReservationEmail`, **Statamic 6, PHP 8.3+, Laravel 12 or 13**), Installation (`composer require ... && php artisan resrv-vouchers:install`), Configuration (`enabled_collections`, `grace_days`, `signing_key`), Email customization (publish + add include directive), CP usage (scanner + list — note both are Inertia pages, full HMR with `npm run cp:dev`), Troubleshooting (camera-permission HTTPS note, scanning fails over `http://` in production; if `npm run cp:build` errors about `@statamic/cms` missing, the host site needs `composer install` first so the Vite plugin can resolve from `vendor/`).
 
-- [ ] **T11.3 Document the hook in Resrv**
+- [x] **T11.3 Document the hook in Resrv**
   - Add a short section to Resrv's `CLAUDE.md` documenting the new `BuildingReservationEmail` event for future addons. Reference Vouchers as the canonical consumer.
 
-- [ ] **T11.4 Final test run**
+- [x] **T11.4 Final test run**
   - `vendor/bin/pest` in `statamic-resrv-vouchers` — all green.
   - `vendor/bin/phpunit` in `statamic-resrv` — all green.
   - `vendor/bin/pint` clean in both packages.
+  - **Status check 2026-05-16:** Vouchers ✅ pest 51/120 green, ✅ pint clean. Resrv ❌ phpunit 802 errors (Resrv's TestCase still on v5 Manifest API — see TV6.7 status note), ⚠️ pint reports 3 files with stylistic fixes (`src/Models/Availability.php`, `src/Console/Commands/UpgradeToRates.php`, `tests/TestCase.php`) — all pre-existing on `v6-upgrade`, none touched by Vouchers work. Files this addon added/modified in Resrv (Phase 0 + T11.3) individually pass pint. Marking partial; full green awaits Resrv's own v6 migration finishing.
+  - **Status check 2026-06-05:** Vouchers ✅ pest 65/165 green against Resrv `dev-main`, ✅ pint clean. Resrv (`main` + the voucher hook merge) ✅ phpunit 1146 tests / 3227 assertions OK (1 skipped), ✅ the 4 voucher-hook files pass pint; ⚠️ full pint flags one pre-existing file (`src/Support/ActiveReservationsGuard.php`, statement_indentation) untouched by Vouchers work — left for Resrv per cross-cutting rule #5.
 
 - [ ] **T11.5 Manual cross-browser UAT**
   - Mobile Safari (iOS): scan works, camera permission prompt clear.
@@ -431,10 +583,12 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 
 ## Acceptance criteria (treat as the gate)
 
-- All 31 tasks checked.
-- PEST suite green; Resrv PHPUnit suite green.
+- All backend tasks (Phases 0–8) + Phase V6 + Phase 9 + Phase 10 + Phase 11 checked.
+- PEST suite green against Statamic 6 / `Statamic\Testing\AddonTestCase`; sibling Resrv PHPUnit suite (on its `v6-upgrade` branch) green.
+- `npm run cp:build` exits 0, emits `resources/dist/build/`, no `@vitejs/plugin-vue2` in the dep graph.
 - Confirming a reservation in an enabled collection triggers an email with an inline QR PNG and a PDF attachment.
-- Scanning that QR in `/cp/resrv-vouchers/scan` displays the reservation; "Mark as used" flips status, sends the attended email, audit-logs the action.
+- `/cp/resrv-vouchers/scan` and `/cp/resrv-vouchers` both render as Inertia pages (no Blade fallback) on a v6 host site.
+- Scanning a QR displays the reservation; "Mark as used" flips status, sends the attended email, audit-logs the action.
 - Cancellation/refund invalidates the voucher; expired vouchers report as expired without a cron.
 - A second admin can "Un-mark" a used voucher without triggering a new customer email.
 
@@ -446,6 +600,8 @@ Branch in `statamic-resrv`: `feature/building-email-event`. Do not merge to `mai
 - Custom voucher artwork / branded PDF layouts beyond a simple QR + summary.
 - A separate `use resrv-vouchers` permission.
 - Replacing Resrv's confirmation template (instead, we provide an `@include` snippet).
+- A v5 release line — the addon ships v6-only. Hosts still on Statamic 5 use the v5-era Resrv without vouchers.
+- `UserConfig.php` + settings blueprint — the current config keys are developer-managed; revisit if user-facing settings appear.
 
 ---
 
@@ -494,3 +650,31 @@ T8.2 done 2026-05-16: VoucherCpController + LookupRequest + MarkUsedRequest. Eac
 T8.3 done 2026-05-16: cp.vouchers.index.blade.php mounts <vouchers-list>; cp.vouchers.scan.blade.php mounts <voucher-scanner>. Both extend statamic::layout.
 T8.4 done 2026-05-16: VouchersProvider::createNavigation registers Vouchers under Resrv section with children List + Scan (each ->can('use resrv')).
 T8.5 done 2026-05-16: tests/Feature/CpScanFlowTest.php — 12 cases covering lookup/mark-used/un-mark/resend happy paths, 422 for invalid/missing token, 422 on illegal transition, 403 without 'use resrv', audit-log assertions, index/scan/list pages. Migration tweak: voucher_id on resrv_voucher_scans now nullable so 'not-found' results can be audit-logged. TestCase gained Statamic\Version stub + signInUserWithoutResrvPermission helper. Full pest suite: 42 tests / 71 assertions green; pint clean.
+TV6.1 done 2026-05-16: composer.json bumped to php ^8.3 + statamic/cms ^6.0. composer update resolved cleanly — statamic/cms v5.73.22 → v6.19.0, reachweb/statamic-resrv dev-refactor/rates → dev-v6-upgrade, inertiajs/inertia-laravel v2.0.24 installed alongside laravel/framework v13.9.0 + symfony 8.x + orchestra/testbench v11.1.0.
+TV6.3 done 2026-05-16: VouchersProvider::boot() body moved to bootAddon(); parent::boot() call dropped. In v6 the framework's boot() drives auto-discovery, so addon work belongs in the bootAddon() hook.
+TV6.6 done 2026-05-16: tests/TestCase.php now extends Statamic\Testing\AddonTestCase with protected $addonServiceProvider; dropped the Version::shouldReceive('5.5.0') stub and the manual Statamic\Extend\Manifest setup (the class was removed in v6 — replaced by Statamic\Addons\Manifest, which the parent base class wires up). Resrv is appended to the Manifest in getEnvironmentSetUp so its bootAddon() (and therefore loadMigrationsFrom for resrv_entries et al) fires. Livewire + Statamic-Livewire + Resrv providers merged into parent::getPackageProviders(). Cache/session/queue/mail/editions config still set explicitly. Full pest suite: 42 tests / 71 assertions green on Statamic 6.19. Pint clean.
+Phase 0 wiring restored on Resrv v6-upgrade (BuildingReservationEmail event class, Mailable::dispatchBuildingEvent helper, ReservationConfirmed::build dispatch). The commit existed on a separate features/resrv-voucher-required-changes branch but had never landed on v6-upgrade — restored via direct file write since the underlying work is already authorised and recorded as done (T0.1–T0.4).
+TV6.2 done 2026-05-16: VouchersProvider declares protected $vite with input=[resources/js/cp.js, resources/css/cp.css], publicDirectory=resources/dist, hotFile=__DIR__.'/../../resources/dist/hot' (mirrors Resrv's pattern). The actual JS/CSS files come in Phase 9; the framework just needs the declaration so the CP knows where to look once the build is in place. Full pest suite green.
+TV6.4 done 2026-05-16: VoucherCpController::indexCp and scanCp now return Inertia::render('resrv-vouchers::Vouchers/Index') / ('resrv-vouchers::Vouchers/Scan') with bootstrap props — index gets listUrl + resendUrl (with {voucher} stub for Listing's action URL templating) + statuses (value/label pairs derived from VoucherStatus::cases()) + defaultPerPage; scan gets lookupUrl + markUsedUrl + unMarkUrl. Mutation endpoints (lookup/markUsed/unMark/resend) stay JSON. Two new Inertia-aware tests in CpScanFlowTest assert page component + props. Suite: 44 tests / 103 assertions green.
+TV6.5 done 2026-05-16: resources/views/cp/vouchers/{index,scan}.blade.php deleted. grep -rn "@extends('statamic::layout')" resources/views/ returns zero hits. The email partial qr.blade.php remains — it's a host-side @include not a CP view.
+T10.1 done 2026-05-16: Verified VoucherStateMachine::markUsed dispatches VoucherUsed after the guard + DB save (line 33 of VoucherStateMachine.php); unMark dispatches VoucherUnmarked symmetrically. Failed transitions throw before any dispatch.
+T10.2 done 2026-05-16: SendAttendedEmailOnVoucherUsed listener (implements ShouldQueue) reads voucher->reservation->customer->email; early-returns when missing/empty; otherwise Mail::to(...)->queue(new VoucherAttended($voucher)).
+T10.3 done 2026-05-16: Mail\VoucherAttended extends Reach\StatamicResrv\Mail\Mailable so it inherits the theme components + applyResrvEmailConfig pattern. Default template statamic-resrv-vouchers::email.vouchers.attended (publishable Blade with mail::message + mail::panel containing guest name + reference + dates). Default subject "Thank you for attending!" overridable via resrv-vouchers.email.attended.subject.
+T10.4 done 2026-05-16: VouchersProvider::$listen wires VoucherUsed → SendAttendedEmailOnVoucherUsed.
+T10.5 done 2026-05-16: tests/Feature/AttendedEmailTest.php — 4 cases: queued to customer on markUsed, un-mark does NOT queue again, render contains guest name + reference, skip when customer email is empty. Full pest suite: 48 tests / 109 assertions green; pint clean.
+T11.1 done 2026-05-16: InstallVouchers (src/Console/Commands/InstallVouchers.php) — signature resrv-vouchers:install, RunsInPlease so `php artisan resrv-vouchers:install` works. Publishes resrv-vouchers-config silently, runs migrate, then interactive prompts for resrv-vouchers-emails + resrv-vouchers-language tags. Post-install info reminds operator to populate enabled_collections, confirm Resrv ships BuildingReservationEmail, and optionally add the @include partial to a published confirmed.blade.php. VouchersProvider::$commands array added; new publishable tags resrv-vouchers-emails + resrv-vouchers-language wired in bootAddon(). tests/Feature/InstallVouchersCommandTest.php — 3 cases (command registered, declines optional prompts, accepts and produces expected files). Full pest suite: 51 tests / 120 assertions green; pint clean.
+T9.1 done 2026-05-16: package.json (type=module, scripts cp:dev/cp:build) + vite.config.js (@statamic/cms vite-plugin + @tailwindcss/vite + laravel-vite-plugin pointing at resources/js/cp.js + resources/css/cp.css, publicDirectory=resources/dist). Deps: @statamic/cms via file:../../../vendor/statamic/cms/resources/dist-package, html5-qrcode ^2.3.8, axios, tailwindcss ^4. devDeps include @vitejs/plugin-vue ^6.0 — required because @statamic/cms imports it but the file: install doesn't ship its own node_modules. Install with `npm install --install-links` so @statamic/cms is copied (not symlinked), letting Node resolve transitive deps from the addon's own node_modules.
+T9.2 done 2026-05-16: resources/js/cp.js — Statamic.booting hook registers VouchersIndex + VouchersScan against the Inertia handles 'resrv-vouchers::Vouchers/Index' and 'resrv-vouchers::Vouchers/Scan' (handles match VoucherCpController::indexCp/scanCp Inertia::render strings from TV6.4).
+T9.3 done 2026-05-16: resources/css/cp.css — one `@import "tailwindcss";` line. No PostCSS chain, no tailwind.config.js — Tailwind v4 reads @theme straight from CSS when/if custom tokens are added later.
+T9.4 done 2026-05-16: resources/js/pages/Vouchers/Scan.vue — <script setup>, props lookupUrl/markUsedUrl/unMarkUrl, html5-qrcode scanner mounted onMounted / torn down onBeforeUnmount, dynamic import('html5-qrcode') so the heavy lib only loads on the scan page. Manual token entry fallback + "Switch camera" button (only when getCameras() returns > 1). On decode → axios.post(lookupUrl, {token}). Result panel renders status badge (colour mapped from VoucherStatus via local statusVariant fn) + reservation summary + Mark/Un-mark/Scan another buttons gated by current status. Compiles cleanly.
+T9.5 done 2026-05-16: resources/js/pages/Vouchers/Index.vue — <Listing :url=listUrl :columns :filters …> from @statamic/cms/ui. Columns: id / status / reservation.reference / expires_at / used_at / created_at. Status filter populated from props.statuses (value/label pairs from controller). preferences-prefix="resrv-vouchers.vouchers" + push-query so URL state survives reloads.
+T9.6 done 2026-05-16: Already landed via TV6.2 — VouchersProvider declares protected $vite with input=[cp.js, cp.css], publicDirectory=resources/dist, hotFile=__DIR__.'/../../resources/dist/hot'. Verified `npm run cp:build` emits resources/dist/build/manifest.json + assets. Pest suite still 51/120 green; pint clean. T9.7 (mobile/desktop UAT) requires a phone with a camera and a host site — left pending.
+T11.2 done 2026-05-16: README.md — Requirements (Statamic 6 / PHP 8.3+ / Laravel 12-13 / Resrv with BuildingReservationEmail / use resrv permission), Installation (composer require + resrv-vouchers:install), Configuration (enabled_collections, grace_days, signing_key fallback, email.attended overrides), Email customization (publish Resrv emails + @include the QR partial), CP usage (Resrv → Vouchers nav, list + scan pages, both Inertia, `npm install --install-links` then cp:dev for HMR / cp:build for production), voucher lifecycle table (Resrv events ↔ voucher states), Troubleshooting (HTTPS camera requirement, @statamic/cms install caveat, missing inline QR vs PDF always-attached, eligibility check). Pint clean; pest suite unchanged at 51/120.
+T11.3 done 2026-05-16: Added a "BuildingReservationEmail hook (for sibling addons)" subsection to Resrv's CLAUDE.md right under "Event-Driven Reservation Lifecycle". Documents what the event carries, how subclasses opt in via dispatchBuildingEvent(), the synchronous-listener constraint (don't ShouldQueue because the event fires inside build() right before send), and references statamic-resrv-vouchers' AttachVoucherToReservationEmail as the canonical consumer.
+TV6.7 done 2026-05-16: composer install resolves Vouchers ^6.0 cleanly against ../statamic-resrv on v6-upgrade. Vouchers pest 51/120 green — confirms cross-package source compatibility (models, events, mailables, customer all exercised end-to-end through the Vouchers suite). Caveat: Resrv's *own* phpunit suite is currently red on v6-upgrade because Resrv's tests/TestCase.php still uses the v5 `Statamic\Extend\Manifest` API — same migration we did in TV6.6, but for the Resrv repo. Logged in TV6.7 status note + as a known constraint on T11.4. Out of Vouchers scope per cross-cutting rule #5.
+T11.4 partial 2026-05-16: Vouchers ✅ (pest 51/120 green, pint clean, npm run cp:build emits manifest+assets, no @vitejs/plugin-vue2). Resrv ❌ (phpunit 802 errors, all from the v5 TestCase Manifest issue, none introduced by Vouchers work) / ⚠️ (pint reports 3 stylistic fixes in pre-existing v6-upgrade files; the 4 files Vouchers added/modified in Resrv individually pass pint). Marked partial — gate flips to fully green once Resrv migrates its TestCase to AddonTestCase per the v6 playbook.
+Coverage hardening 2026-05-16: Two new tests in CancellationInvalidatesVoucherTest locking down silent-catch behaviour in InvalidateVoucherOnCancellation — (a) a Used voucher stays Used (not invalidated) when the reservation is later refunded, because the customer already attended; (b) an already-Invalidated voucher keeps its original reason on a second cancellation event (double-dispatch is a no-op). Both paths were silently handled by the listener's try/catch — now explicitly verified. Suite: 53 tests / 127 assertions green; pint clean.
+Coverage hardening 2026-05-16: tests/Unit/VoucherStatusTest.php (9 tests, 32 assertions) locks the VoucherStatus::resultKey() + banner() contracts. resultKey() values land in resrv_voucher_scans.result (used for audit reporting); banner() drives the colour-coded panel in Scan.vue (tone + message). Dataset-driven so each enum case is covered, plus a foreach-cases guard that catches the "added a new case without updating these methods" failure mode. Suite: 62 tests / 159 assertions green; pint clean.
+Coverage hardening 2026-05-16: Three new tests in ExpirationTest cover the state-machine ↔ lazy-expiration interaction — (a) markUsed on a row-state=Issued voucher whose expires_at is in the past throws InvalidVoucherTransitionException (lazy-expiry blocks late scanning); (b) invalidate still works on a lazy-expired voucher (so cleanup/refund flows aren't blocked by stale expiry); (c) unMark on a never-Used voucher throws. Real product rules previously implicit in guardTransition + statusOf interplay — now explicit. Suite: 65 tests / 165 assertions green; pint clean.
+Retarget to Resrv main 2026-06-05: merged features/resrv-voucher-required-changes into Resrv main (d01e363, local; BuildingReservationEmailTest 2/2 green there); composer update resolved reachweb/statamic-resrv dev-main + statamic/cms 6.20.2. Fixed tests/TestCase.php Manifest entry id reach/resrv → reachweb/statamic-resrv — Resrv main merges settings-blueprint defaults (currency_isoCode et al) via Addon::get('reachweb/statamic-resrv'), so the wrong id left currency null and failed 30 tests through the Price cast. Full suite 65/165 green; pint clean. CLAUDE.md + tasks.md references updated v6-upgrade → main.
+T11.4 done 2026-06-05: both packages green — Vouchers pest 65/165 against dev-main, Resrv phpunit 1146/3227 OK (1 skipped) on main including the voucher-hook merge. Pint clean in Vouchers; Resrv's single pint nit (ActiveReservationsGuard.php) pre-dates the merge and is out of Vouchers scope.

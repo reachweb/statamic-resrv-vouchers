@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`reachweb/statamic-resrv-vouchers` — a Statamic 5 addon that generates signed-token QR-code vouchers for confirmed Resrv reservations, attaches them (inline PNG + PDF) to Resrv's existing confirmation email, and provides a CP scanner for staff to validate/mark-used vouchers via phone camera.
+`reachweb/statamic-resrv-vouchers` — a **Statamic 6** addon (Inertia.js + Vue 3 CP) that generates signed-token QR-code vouchers for confirmed Resrv reservations, attaches them (inline PNG + PDF) to Resrv's existing confirmation email, and provides a CP scanner for staff to validate/mark-used vouchers via phone camera.
 
 - **Namespace:** `Reach\StatamicResrvVouchers\` (PSR-4 from `src/`)
-- **PHP:** 8.2+ · **Laravel:** 11.x or 12.x · **Statamic:** 5.x
-- **Sibling addon (hard dep):** `reachweb/statamic-resrv` at [../statamic-resrv](../statamic-resrv). Pulled in via a path repository; until the companion `feature/building-email-event` branch (Phase 0) lands, the version constraint is `*`.
+- **PHP:** 8.3+ · **Laravel:** 12.x or 13.x · **Statamic:** 6.x · **Vue:** 3 · **CP:** Inertia.js
+- **Sibling addon (hard dep):** `reachweb/statamic-resrv` at [../statamic-resrv](../statamic-resrv), on `main` (v6-ready: Statamic 6 / PHP 8.4 / Vite 8 / Tailwind v4; the `BuildingReservationEmail` hook is merged in). Pulled in via a path repository; constraint stays `*` until Resrv tags a `^6.0` release.
+- **v6 retarget:** The backend (Phases 0–8 in [tasks.md](tasks.md)) was authored against v5 and remains valid. The CP frontend is being built v6-native from the start (Phase 9). A dedicated **Phase V6** sweep covers the v5→v6 alignment items (`composer.json` bumps, `boot()` → `bootAddon()`, Blade CP views → Inertia pages, `OrchestraTestCase` → `Statamic\Testing\AddonTestCase`). The reference playbook lives at `/Users/afonic/.claude/skills/statamic-addon-v5-to-v6/`.
 
 ## Canonical task list
 
@@ -54,7 +55,7 @@ To verify the sibling Resrv tests still pass after a Phase 0 change:
 The addon does not modify Resrv; it consumes Resrv's events. Key wiring points (most still to-build, see `tasks.md`):
 
 - `Reach\StatamicResrv\Events\ReservationConfirmed` → `GenerateVoucherForReservation` listener (queued) creates a `Voucher` row.
-- `Reach\StatamicResrv\Events\BuildingReservationEmail` → `AttachVoucherToReservationEmail` listener (**must be synchronous** — it mutates the mailable). This event is the Phase 0 addition to Resrv (`src/Mail/Mailable.php` + `ReservationConfirmed::build()`).
+- `Reach\StatamicResrv\Events\BuildingReservationEmail` → `AttachVoucherToReservationEmail` listener (**must be synchronous** — it mutates the mailable). This event is the Phase 0 addition to Resrv (`src/Mail/Mailable.php` + `ReservationConfirmed::build()`), merged to Resrv `main` for the v6 release.
 - `Reach\StatamicResrv\Events\ReservationCancelled|Refunded|Expired` → `InvalidateVoucherOnCancellation`.
 - Internal: `VoucherUsed` → `SendAttendedEmailOnVoucherUsed` (the "thanks for attending" mail).
 
@@ -67,11 +68,13 @@ The `VoucherStateMachine` service is the only thing that mutates voucher state; 
 
 ### Permissions & CP UI
 
-Reuses Resrv's existing `use resrv` permission — no new permission. CP nav lives under the "Resrv" section. CP scanner is Vue 2 + `html5-qrcode` (matches Resrv's frontend stack) with a text-input fallback when the camera is denied/absent.
+Reuses Resrv's existing `use resrv` permission — no new permission. CP nav lives under the "Resrv" section. CP scanner is a Vue 3 Inertia page + `html5-qrcode` with a text-input fallback when the camera is denied/absent.
 
 ## Testbench + Laravel Boost
 
 [testbench.yaml](testbench.yaml) configures the Testbench app: providers (Statamic, Livewire, Resrv, this addon), `APP_ENV=local`, `APP_DEBUG=true`, fixed `APP_KEY`, sqlite-in-memory, array mail/cache/session. This makes `vendor/bin/testbench <command>` work for all package commands.
+
+`tests/TestCase.php` registers Resrv in Statamic's addon `Manifest` keyed by its real package id (`reachweb/statamic-resrv`). The key matters: Resrv `main` sources its CP-managed setting defaults (e.g. `resrv-config.currency_isoCode`) from its settings blueprint via `Addon::get('reachweb/statamic-resrv')` — a wrong manifest id silently skips that merge and `Price` casts blow up on a null currency.
 
 Laravel Boost (dev dep) auto-discovers through Boost's own service provider. `vendor/bin/testbench boost:mcp` starts the MCP server (stdio JSON-RPC) — point Claude Code's MCP client at that command with `cwd` set to the addon root. Boost skips itself when `app()->runningUnitTests()`, so PEST runs are unaffected.
 
@@ -81,7 +84,7 @@ Laravel Boost (dev dep) auto-discovers through Boost's own service provider. `ve
 - Run `vendor/bin/pint` before considering a task complete.
 - **PHPDoc / comments:** none, unless the WHY is non-obvious. Follow Resrv's existing style.
 - Migrations must work on SQLite (tests), MySQL/MariaDB, and PostgreSQL — stick to the standard Schema builder. **No FK constraint on `reservation_id`** (Resrv's migrations live in a separate package; FK order is fragile across drivers).
-- Don't change Resrv's behavior outside Phase 0. Any Resrv change goes on its `feature/building-email-event` branch.
+- Don't change Resrv's behavior outside Phase 0. The Phase 0 hook (`BuildingReservationEmail`) is merged to Resrv `main`; any further Resrv change goes on its own feature branch over there.
 - Commits: small, atomic, conventional-commit-ish. One phase ≈ one or two commits. Update `tasks.md` (checkbox + done-log line) when finishing a task, then commit.
 
 ## Out of scope (don't implement without re-asking)
