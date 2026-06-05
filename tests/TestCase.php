@@ -56,8 +56,8 @@ abstract class TestCase extends AddonTestCase
 
         $manifest = $app->make(Manifest::class);
         $manifest->manifest = array_merge($manifest->manifest, [
-            'reach/resrv' => [
-                'id' => 'reach/resrv',
+            'reachweb/statamic-resrv' => [
+                'id' => 'reachweb/statamic-resrv',
                 'slug' => 'statamic-resrv',
                 'version' => 'dev-main',
                 'namespace' => 'Reach\\StatamicResrv',
