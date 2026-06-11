@@ -581,6 +581,34 @@ Audit run 2026-05-16 against the current addon tree. Findings drive the tasks be
 
 ---
 
+## Phase UAT — real-site fixes (tester report 2026-06-11, dev-main cef7e7b on a Statamic 6 host)
+
+All 11 reported issues verified valid against the code before fixing. Decisions: missing-Resrv-event guard **throws at boot** (fail loudly); resend listing action **deferred**.
+
+- [x] **TU.1 Rebuild the Vouchers Index listing on the Statamic scopes/resource protocol** (issues 2–4, 8)
+  - `src/Filters/VoucherStatus.php` (Scope filter, handle `voucher_status`, registered via `$scopes`), `src/Blueprints/VoucherBlueprint.php`, `src/Resources/VoucherResource.php` (`HasRequestedColumns`, `meta.columns`, dates via `preProcessIndex`).
+  - `VoucherCpController::index(FilteredRequest)` + `QueriesFilters` → `meta.activeFilterBadges`; sort whitelist; `perPage` clamp; `search` on id + reservation reference.
+  - `Index.vue`: server-driven filters/columns, `<Header :title>` (titles rendered top-right before — the Header default slot is the actions area).
+
+- [ ] **TU.2 Scan page fixes** (issues 5–9)
+  - Styled `Alert` banner instead of raw JSON; card state updates from the PATCH response (no re-lookup → no `scan | already-used` audit pollution); server-formatted dates; camera starts on click; `<Header :title>`.
+
+- [ ] **TU.3 endroid/qr-code ^6.0** (issue 10) — implicit-nullable deprecation warnings on PHP 8.4/8.5; QrRenderer moves to the 6.x constructor Builder API.
+
+- [ ] **TU.4 Boot guard for `BuildingReservationEmail`** (issue 11) — `VouchersProvider::bootAddon()` throws a RuntimeException when the event class is missing (stale Resrv).
+
+- [ ] **TU.5 Ship compiled CP assets** (issue 1) — `.gitignore` ignores only `resources/dist/hot` (mirror Resrv); `resources/dist/build` committed; rebuild before tagging/pushing whenever `resources/js|css` change.
+
+- [ ] **TU.6 Docs** — README (camera click-to-start, shipped dist), CLAUDE.md (dist convention).
+
+- [ ] **TU.7 Resend row action in the Index listing** (deferred from this round; original T9.5 scope) — per-row Dropdown + ConfirmationModal calling the existing `resend` endpoint (Resrv's `Reservations/Index.vue` pattern), toast on success.
+
+- [ ] **TU.8 Constrain `reachweb/statamic-resrv` to `^6.0` once Resrv tags it** (replaces the `*` + boot-guard stopgap).
+
+- [ ] **TU.9 Re-run the real-site UAT (mylos)** — list renders with filters/sort/search/columns; scan flow incl. mark-used/un-mark from PATCH response; no endroid deprecations in queue output; fresh `composer require` gets working CP assets.
+
+---
+
 ## Acceptance criteria (treat as the gate)
 
 - All backend tasks (Phases 0–8) + Phase V6 + Phase 9 + Phase 10 + Phase 11 checked.
@@ -679,3 +707,4 @@ Coverage hardening 2026-05-16: Three new tests in ExpirationTest cover the state
 Retarget to Resrv main 2026-06-05: merged features/resrv-voucher-required-changes into Resrv main (d01e363, local; BuildingReservationEmailTest 2/2 green there); composer update resolved reachweb/statamic-resrv dev-main + statamic/cms 6.20.2. Fixed tests/TestCase.php Manifest entry id reach/resrv → reachweb/statamic-resrv — Resrv main merges settings-blueprint defaults (currency_isoCode et al) via Addon::get('reachweb/statamic-resrv'), so the wrong id left currency null and failed 30 tests through the Price cast. Full suite 65/165 green; pint clean. CLAUDE.md + tasks.md references updated v6-upgrade → main.
 T11.4 done 2026-06-05: both packages green — Vouchers pest 65/165 against dev-main, Resrv phpunit 1146/3227 OK (1 skipped) on main including the voucher-hook merge. Pint clean in Vouchers; Resrv's single pint nit (ActiveReservationsGuard.php) pre-dates the merge and is out of Vouchers scope.
 T11.2 refresh 2026-06-06: README rewritten against a full code read — PHP floor stated as 8.4+ (Resrv v6 requirement), Resrv requirement now "v6" (BuildingReservationEmail hedge dropped), queue-worker requirement documented (generation + attended email are queued; new Requirements bullet + 2 Troubleshooting entries), new "How it works" overview, install steps match InstallVouchers order/prompts, lifecycle table gained edge rules (used stays used on refund, expired blocks mark-used, no-voucher email sends normally), resend documented as going through Resrv's ReservationEmailDispatcher, npm build chain moved into a new "Developer reference" (events, audit values, schema, internal endpoints incl. PATCH methods). Pest 65/165 green.
+TU.1 done 2026-06-11: Index listing rebuilt on the real Statamic 6 Listing protocol after real-site testing showed the hand-rolled version crashed at setup (filters without auto_apply → Object.keys TypeError) and mismatched on every axis (columns keyed handle vs field, paginator response without meta.columns/activeFilterBadges, status/per_page params vs base64 filters/sort/order/perPage/search). New: Filters/VoucherStatus (Scope, handle voucher_status), Blueprints/VoucherBlueprint, Resources/VoucherResource (HasRequestedColumns + preProcessIndex dates); controller index() now FilteredRequest + QueriesFilters with sort whitelist, perPage clamp 1-100, search on id/reservation.reference; indexCp() passes Scope::filters('resrv-vouchers'); Index.vue is server-driven with <Header :title> (default Header slot is the actions area — that's why titles rendered top-right) and Badge cell for status. 5 new protocol tests. Pest 69/192 green; pint clean.

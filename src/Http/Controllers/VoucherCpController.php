@@ -6,21 +6,25 @@ use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
-use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Exceptions\InvalidVoucherTransitionException;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Models\VoucherScan;
+use Reach\StatamicResrvVouchers\Resources\VoucherResource;
 use Reach\StatamicResrvVouchers\Services\VoucherStateMachine;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
+use Statamic\Facades\Scope;
+use Statamic\Http\Requests\FilteredRequest;
+use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
 
 class VoucherCpController extends Controller
 {
+    use QueriesFilters;
+
     public function __construct(
         private readonly VoucherTokenSigner $signer,
         private readonly VoucherStateMachine $stateMachine,
@@ -29,13 +33,8 @@ class VoucherCpController extends Controller
     public function indexCp(): InertiaResponse
     {
         return Inertia::render('resrv-vouchers::Vouchers/Index', [
+            'filters' => Scope::filters('resrv-vouchers'),
             'listUrl' => cp_route('resrv-vouchers.index.json'),
-            'resendUrl' => cp_route('resrv-vouchers.resend', ['voucher' => '__id__']),
-            'statuses' => collect(VoucherStatus::cases())->map(fn (VoucherStatus $s) => [
-                'value' => $s->value,
-                'label' => __(ucfirst($s->value)),
-            ])->all(),
-            'defaultPerPage' => 25,
         ]);
     }
 
@@ -48,27 +47,33 @@ class VoucherCpController extends Controller
         ]);
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(FilteredRequest $request): VoucherResource
     {
-        $validated = $request->validate([
-            'status' => ['nullable'],
-            'status.*' => ['string', Rule::enum(VoucherStatus::class)],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
-
         $query = Voucher::query()->with('reservation.customer');
 
-        if ($status = $validated['status'] ?? null) {
-            $query->whereIn('status', is_array($status) ? $status : [$status]);
+        $activeFilterBadges = $this->queryFilters($query, $request->filters);
+
+        if ($search = request('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                    ->orWhereHas('reservation', fn ($r) => $r->where('reference', 'like', "%{$search}%"));
+            });
         }
 
-        $vouchers = $query->latest()->paginate($validated['per_page'] ?? 25);
+        $sort = in_array(request('sort'), ['id', 'status', 'expires_at', 'used_at', 'created_at'], true)
+            ? request('sort')
+            : 'created_at';
+        $query->orderBy($sort, request('order') === 'asc' ? 'asc' : 'desc');
 
-        $vouchers->getCollection()->each(
-            fn (Voucher $v) => $v->reservation?->makeHidden(['entry'])
-        );
+        // Clamp so a huge ?perPage can't load/serialize unbounded rows (matches Resrv's CP listings).
+        $perPage = (int) (request('perPage') ?? config('statamic.cp.pagination_size', 25));
+        $perPage = max(1, min($perPage, 100));
 
-        return response()->json($vouchers);
+        return (new VoucherResource($query->paginate($perPage)))
+            ->columnPreferenceKey('resrv-vouchers.vouchers.columns')
+            ->additional(['meta' => [
+                'activeFilterBadges' => $activeFilterBadges,
+            ]]);
     }
 
     public function lookup(Request $request): JsonResponse

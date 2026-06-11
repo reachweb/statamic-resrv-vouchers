@@ -119,7 +119,7 @@ it('returns 200 for the CP index page', function () {
     $this->get(cp_route('resrv-vouchers.index'))->assertOk();
 });
 
-it('renders the CP index page as Inertia with list bootstrap props', function () {
+it('renders the CP index page as Inertia with scope filters and list URL props', function () {
     $this->signInAdmin();
 
     $this->get(cp_route('resrv-vouchers.index'))
@@ -127,8 +127,11 @@ it('renders the CP index page as Inertia with list bootstrap props', function ()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('resrv-vouchers::Vouchers/Index')
             ->where('listUrl', cp_route('resrv-vouchers.index.json'))
-            ->where('defaultPerPage', 25)
-            ->has('statuses', count(VoucherStatus::cases()))
+            ->has('filters', 1, fn (AssertableInertia $filter) => $filter
+                ->where('handle', 'voucher_status')
+                ->where('auto_apply', [])
+                ->etc()
+            )
         );
 });
 
@@ -151,11 +154,73 @@ it('renders the CP scan page as Inertia with mutation URLs as props', function (
         );
 });
 
-it('lists vouchers as JSON', function () {
+it('lists vouchers as JSON in the Listing protocol shape', function () {
     $this->signInAdmin();
     $voucher = $this->makeIssuedVoucher();
 
     $response = $this->getJson(cp_route('resrv-vouchers.index.json'));
 
-    $response->assertOk()->assertJsonFragment(['id' => $voucher->id]);
+    $response->assertOk()
+        ->assertJsonPath('data.0.id', $voucher->id)
+        ->assertJsonPath('data.0.reference', $voucher->reservation->reference)
+        ->assertJsonPath('data.0.customer.email', 'guest@example.com')
+        ->assertJsonPath('meta.columns.0.field', 'id')
+        ->assertJsonPath('meta.activeFilterBadges', []);
+});
+
+it('filters the voucher list by status and returns a filter badge', function () {
+    $this->signInAdmin();
+    $this->makeIssuedVoucher();
+    $used = $this->makeIssuedVoucher();
+    $used->update(['status' => VoucherStatus::Used, 'used_at' => now()]);
+
+    $filters = base64_encode(json_encode(['voucher_status' => ['status' => ['used']]]));
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['filters' => $filters]))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $used->id)
+        ->assertJsonPath('meta.activeFilterBadges.voucher_status', 'Used');
+});
+
+it('sorts the voucher list by a whitelisted column and falls back on unknown sort fields', function () {
+    $this->signInAdmin();
+    $first = $this->makeIssuedVoucher();
+    $second = $this->makeIssuedVoucher();
+    $first->update(['expires_at' => now()->addDay()]);
+    $second->update(['expires_at' => now()->addDays(5)]);
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['sort' => 'expires_at', 'order' => 'asc']))
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $first->id);
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['sort' => 'token', 'order' => 'asc']))
+        ->assertOk();
+});
+
+it('clamps perPage and paginates the voucher list', function () {
+    $this->signInAdmin();
+    $this->makeIssuedVoucher();
+    $this->makeIssuedVoucher();
+    $this->makeIssuedVoucher();
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['perPage' => 2]))
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('meta.last_page', 2);
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['perPage' => 500]))
+        ->assertOk()
+        ->assertJsonPath('meta.per_page', 100);
+});
+
+it('searches the voucher list by reservation reference', function () {
+    $this->signInAdmin();
+    $voucher = $this->makeIssuedVoucher();
+    $this->makeIssuedVoucher();
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['search' => $voucher->reservation->reference]))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $voucher->id);
 });
