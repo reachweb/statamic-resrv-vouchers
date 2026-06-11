@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cf08832986ed7268b3994dc043df6852",
+    "content-hash": "c1cea334480bb219ff6bd48a85f27d88",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -5037,7 +5037,7 @@
         },
         {
             "name": "reachweb/statamic-resrv",
-            "version": "dev-fix/duplicated-entries",
+            "version": "6.x-dev",
             "dist": {
                 "type": "path",
                 "url": "../statamic-resrv",
