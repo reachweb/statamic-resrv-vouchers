@@ -15,6 +15,7 @@ use Reach\StatamicResrvVouchers\Listeners\GenerateVoucherForReservation;
 use Reach\StatamicResrvVouchers\Listeners\InvalidateVoucherOnCancellation;
 use Reach\StatamicResrvVouchers\Listeners\SendAttendedEmailOnVoucherUsed;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
+use RuntimeException;
 use Statamic\Facades\CP\Nav;
 use Statamic\Providers\AddonServiceProvider;
 
@@ -71,6 +72,14 @@ class VouchersProvider extends AddonServiceProvider
 
     public function bootAddon(): void
     {
+        // Without this event the addon still issues vouchers but silently sends confirmation
+        // emails with no QR attached — fail loudly instead (a stale Resrv did exactly that).
+        if (! class_exists(BuildingReservationEmail::class)) {
+            throw new RuntimeException(
+                'statamic-resrv-vouchers requires reachweb/statamic-resrv v6+ (the BuildingReservationEmail event is missing). Run: composer update reachweb/statamic-resrv'
+            );
+        }
+
         $this->loadTranslationsFrom(__DIR__.'/../../resources/lang', 'statamic-resrv-vouchers');
 
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'statamic-resrv-vouchers');
