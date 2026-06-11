@@ -28,8 +28,8 @@ _ide_helper.php
 /.agents
 /.claude
 
-# Addon-specific
-/resources/dist
+# Addon-specific — dist ships in git (Packagist installs need the built CP assets); only the HMR hot file stays out
+/resources/dist/hot
 /workbench
 .phpunit.cache
 .pest.cache
