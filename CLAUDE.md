@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Namespace:** `Reach\StatamicResrvVouchers\` (PSR-4 from `src/`)
 - **PHP:** 8.3+ · **Laravel:** 12.x or 13.x · **Statamic:** 6.x · **Vue:** 3 · **CP:** Inertia.js
-- **Sibling addon (hard dep):** `reachweb/statamic-resrv` at [../statamic-resrv](../statamic-resrv), on `main` (v6-ready: Statamic 6 / PHP 8.4 / Vite 8 / Tailwind v4; the `BuildingReservationEmail` hook is merged in). Pulled in via a path repository; constraint stays `*` until Resrv tags a `^6.0` release.
+- **Sibling addon (hard dep):** `reachweb/statamic-resrv` at [../statamic-resrv](../statamic-resrv), on `main` (v6-ready: Statamic 6 / PHP 8.4 / Vite 8 / Tailwind v4; the `BuildingReservationEmail` hook is merged in). Pulled in via a path repository; constraint stays `*` until Resrv tags a `^6.0` release — as a stopgap, `VouchersProvider::bootAddon()` throws if the installed Resrv predates `BuildingReservationEmail`.
 - **v6 retarget:** The backend (Phases 0–8 in [tasks.md](tasks.md)) was authored against v5 and remains valid. The CP frontend is being built v6-native from the start (Phase 9). A dedicated **Phase V6** sweep covers the v5→v6 alignment items (`composer.json` bumps, `boot()` → `bootAddon()`, Blade CP views → Inertia pages, `OrchestraTestCase` → `Statamic\Testing\AddonTestCase`). The reference playbook lives at `/Users/afonic/.claude/skills/statamic-addon-v5-to-v6/`.
 
 ## Canonical task list
@@ -82,6 +82,7 @@ Laravel Boost (dev dep) auto-discovers through Boost's own service provider. `ve
 
 - Run `vendor/bin/pest` after every task that touches `src/` or `tests/`.
 - Run `vendor/bin/pint` before considering a task complete.
+- `resources/dist/build` is **committed** (Packagist installs need the built CP assets; only `resources/dist/hot` is gitignored). Whenever `resources/js` or `resources/css` change, run `npm run cp:build` and commit the fresh dist alongside.
 - **PHPDoc / comments:** none, unless the WHY is non-obvious. Follow Resrv's existing style.
 - Migrations must work on SQLite (tests), MySQL/MariaDB, and PostgreSQL — stick to the standard Schema builder. **No FK constraint on `reservation_id`** (Resrv's migrations live in a separate package; FK order is fragile across drivers).
 - Don't change Resrv's behavior outside Phase 0. The Phase 0 hook (`BuildingReservationEmail`) is merged to Resrv `main`; any further Resrv change goes on its own feature branch over there.
