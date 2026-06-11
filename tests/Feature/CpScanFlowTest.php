@@ -22,7 +22,10 @@ it('returns 200 for lookup with a valid token', function () {
 
     $response->assertOk()
         ->assertJsonPath('voucher.id', $voucher->id)
-        ->assertJsonPath('status', VoucherStatus::Issued->value);
+        ->assertJsonPath('status', VoucherStatus::Issued->value)
+        ->assertJsonPath('status_banner.tone', 'success')
+        ->assertJsonPath('dates.start', $voucher->reservation->date_start->format('Y-m-d'))
+        ->assertJsonPath('dates.end', $voucher->reservation->date_end->format('Y-m-d'));
 
     expect(VoucherScan::query()->where('voucher_id', $voucher->id)
         ->where('action', 'scan')->where('result', 'success')->exists())->toBeTrue();
@@ -62,11 +65,18 @@ it('marks a voucher as used and audit-logs the action', function () {
 
     $response = $this->patchJson(cp_route('resrv-vouchers.mark-used'), ['token' => $voucher->token]);
 
-    $response->assertOk();
+    // The scan card refreshes from this response — it must carry the full lookup payload,
+    // and the action must not add a 'scan' audit row on top of its own.
+    $response->assertOk()
+        ->assertJsonPath('status', VoucherStatus::Used->value)
+        ->assertJsonPath('status_banner.tone', 'warning')
+        ->assertJsonPath('voucher.id', $voucher->id);
     expect($voucher->fresh()->status)->toBe(VoucherStatus::Used);
 
     expect(VoucherScan::query()->where('voucher_id', $voucher->id)
         ->where('action', 'mark-used')->where('result', 'success')->exists())->toBeTrue();
+    expect(VoucherScan::query()->where('voucher_id', $voucher->id)
+        ->where('action', 'scan')->exists())->toBeFalse();
 });
 
 it('returns 422 when marking used a voucher that is already used', function () {
@@ -84,7 +94,9 @@ it('un-marks a used voucher and audit-logs the action', function () {
 
     $response = $this->patchJson(cp_route('resrv-vouchers.un-mark'), ['token' => $voucher->token]);
 
-    $response->assertOk();
+    $response->assertOk()
+        ->assertJsonPath('status', VoucherStatus::Issued->value)
+        ->assertJsonPath('status_banner.tone', 'success');
     expect($voucher->fresh()->status)->toBe(VoucherStatus::Issued);
 
     expect(VoucherScan::query()->where('voucher_id', $voucher->id)

@@ -1,8 +1,8 @@
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { onBeforeUnmount, reactive, ref } from 'vue';
 import axios from 'axios';
 import { Head } from '@statamic/cms/inertia';
-import { Badge, Button, CardPanel, Field, Header, Heading, Input } from '@statamic/cms/ui';
+import { Alert, Badge, Button, CardPanel, Field, Header, Heading, Input } from '@statamic/cms/ui';
 
 const props = defineProps({
     lookupUrl: { type: String, required: true },
@@ -12,6 +12,7 @@ const props = defineProps({
 
 const scanner = ref(null);
 const scannerEl = ref(null);
+const scannerActive = ref(false);
 const cameras = ref([]);
 const currentCameraIndex = ref(0);
 const scannerError = ref('');
@@ -23,14 +24,21 @@ const state = reactive({
     flash: '',
 });
 
-const statusVariant = (status) => ({
-    issued: 'success',
-    used: 'warning',
-    invalidated: 'danger',
-    expired: 'danger',
+const statusColor = (status) => ({
+    issued: 'green',
+    used: 'amber',
+    invalidated: 'red',
+    expired: 'red',
 }[status] ?? 'default');
 
+const bannerVariant = (tone) => ({
+    success: 'success',
+    warning: 'warning',
+    danger: 'error',
+}[tone] ?? 'default');
+
 async function startScanner() {
+    scannerError.value = '';
     try {
         const { Html5Qrcode } = await import('html5-qrcode');
         cameras.value = await Html5Qrcode.getCameras();
@@ -47,6 +55,7 @@ async function startScanner() {
             (decoded) => onDecoded(decoded),
             () => {},
         );
+        scannerActive.value = true;
     } catch (e) {
         scannerError.value = e?.message ?? 'Unable to access the camera.';
     }
@@ -60,6 +69,7 @@ async function stopScanner() {
             // ignore stop errors during teardown
         }
     }
+    scannerActive.value = false;
 }
 
 async function switchCamera() {
@@ -99,9 +109,10 @@ async function lookup() {
 
 async function markUsed() {
     state.pending = true;
+    state.flash = '';
     try {
-        await axios.patch(props.markUsedUrl, { token: state.token });
-        await lookup();
+        const { data } = await axios.patch(props.markUsedUrl, { token: state.token });
+        state.result = data;
     } catch (e) {
         state.flash = e?.response?.data?.message ?? 'Could not mark used.';
     } finally {
@@ -111,9 +122,10 @@ async function markUsed() {
 
 async function unMark() {
     state.pending = true;
+    state.flash = '';
     try {
-        await axios.patch(props.unMarkUrl, { token: state.token });
-        await lookup();
+        const { data } = await axios.patch(props.unMarkUrl, { token: state.token });
+        state.result = data;
     } catch (e) {
         state.flash = e?.response?.data?.message ?? 'Could not un-mark.';
     } finally {
@@ -127,36 +139,37 @@ function scanAnother() {
     state.flash = '';
 }
 
-onMounted(() => {
-    startScanner();
-});
-
 onBeforeUnmount(() => {
     stopScanner();
 });
 </script>
 
 <template>
-    <div>
-        <Head title="Scan voucher" />
-        <Header>
-            <Heading>Scan voucher</Heading>
-        </Header>
+    <div class="max-w-page mx-auto">
+        <Head :title="__('Scan voucher')" />
+
+        <Header :title="__('Scan voucher')" />
 
         <CardPanel>
             <div id="voucher-scanner-viewport" ref="scannerEl" class="mb-4 w-full max-w-sm" />
 
             <p v-if="scannerError" class="text-sm text-orange-600">{{ scannerError }}</p>
 
-            <Button v-if="cameras.length > 1" variant="ghost" @click="switchCamera">Switch camera</Button>
+            <div class="mb-4 flex gap-2">
+                <Button v-if="!scannerActive" @click="startScanner">{{ __('Start camera') }}</Button>
+                <Button v-else variant="ghost" @click="stopScanner">{{ __('Stop camera') }}</Button>
+                <Button v-if="scannerActive && cameras.length > 1" variant="ghost" @click="switchCamera">
+                    {{ __('Switch camera') }}
+                </Button>
+            </div>
 
-            <Field label="Or paste a token">
+            <Field :label="__('Or paste a token')">
                 <Input v-model="state.token" placeholder="paste / type token" />
             </Field>
 
             <div class="mt-3 flex gap-2">
-                <Button :disabled="state.pending" @click="lookup">Validate</Button>
-                <Button variant="ghost" @click="scanAnother">Scan another</Button>
+                <Button :disabled="state.pending" @click="lookup">{{ __('Validate') }}</Button>
+                <Button variant="ghost" @click="scanAnother">{{ __('Scan another') }}</Button>
             </div>
 
             <p v-if="state.flash" class="mt-3 text-sm text-orange-600">{{ state.flash }}</p>
@@ -165,33 +178,38 @@ onBeforeUnmount(() => {
         <CardPanel v-if="state.result" class="mt-4">
             <div class="flex items-center justify-between">
                 <Heading>Voucher {{ state.result.voucher.id }}</Heading>
-                <Badge :variant="statusVariant(state.result.status)">{{ state.result.status }}</Badge>
+                <Badge :color="statusColor(state.result.status)" :text="state.result.status" />
             </div>
 
-            <p v-if="state.result.status_banner" class="mt-2 text-sm">{{ state.result.status_banner }}</p>
+            <Alert
+                v-if="state.result.status_banner"
+                class="mt-3"
+                :variant="bannerVariant(state.result.status_banner.tone)"
+                :text="state.result.status_banner.message"
+            />
 
             <dl v-if="state.result.reservation" class="mt-4 grid grid-cols-2 gap-2 text-sm">
-                <dt class="font-medium">Reference</dt>
+                <dt class="font-medium">{{ __('Reference') }}</dt>
                 <dd>{{ state.result.reservation.reference }}</dd>
-                <dt class="font-medium">Guest</dt>
+                <dt class="font-medium">{{ __('Guest') }}</dt>
                 <dd>
                     {{ state.result.reservation.customer?.data?.first_name }}
                     {{ state.result.reservation.customer?.data?.last_name }}
                 </dd>
-                <dt class="font-medium">Dates</dt>
-                <dd>{{ state.result.reservation.date_start }} – {{ state.result.reservation.date_end }}</dd>
-                <dt class="font-medium">Quantity</dt>
+                <dt class="font-medium">{{ __('Dates') }}</dt>
+                <dd>{{ state.result.dates?.start }} – {{ state.result.dates?.end }}</dd>
+                <dt class="font-medium">{{ __('Quantity') }}</dt>
                 <dd>{{ state.result.reservation.quantity }}</dd>
             </dl>
 
             <div class="mt-4 flex gap-2">
                 <Button v-if="state.result.status === 'issued'" :disabled="state.pending" @click="markUsed">
-                    Mark as used
+                    {{ __('Mark as used') }}
                 </Button>
                 <Button v-if="state.result.status === 'used'" variant="ghost" :disabled="state.pending" @click="unMark">
-                    Un-mark
+                    {{ __('Un-mark') }}
                 </Button>
-                <Button variant="ghost" @click="scanAnother">Scan another</Button>
+                <Button variant="ghost" @click="scanAnother">{{ __('Scan another') }}</Button>
             </div>
         </CardPanel>
     </div>

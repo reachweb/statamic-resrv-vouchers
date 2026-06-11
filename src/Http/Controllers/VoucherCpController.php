@@ -89,18 +89,10 @@ class VoucherCpController extends Controller
             return response()->json(['message' => 'Invalid voucher token.'], 422);
         }
 
-        $voucher->load('reservation.customer');
-        $voucher->reservation?->makeHidden(['entry']);
-
         $status = $this->stateMachine->statusOf($voucher);
         $this->logScan($voucher->id, $userId, 'scan', $status->resultKey(), $request);
 
-        return response()->json([
-            'voucher' => $voucher,
-            'reservation' => $voucher->reservation,
-            'status' => $status->value,
-            'status_banner' => $status->banner(),
-        ]);
+        return response()->json($this->voucherPayload($voucher));
     }
 
     public function markUsed(Request $request): JsonResponse
@@ -171,7 +163,30 @@ class VoucherCpController extends Controller
 
         $this->logScan($voucher->id, $userId, $action, 'success', $request);
 
-        return response()->json(['voucher' => $voucher]);
+        return response()->json($this->voucherPayload($voucher));
+    }
+
+    // The scan card renders entirely from this payload, so transition responses must carry the
+    // same shape as lookup — the page must not re-scan to refresh (it would pollute the audit log).
+    private function voucherPayload(Voucher $voucher): array
+    {
+        $voucher->load('reservation.customer');
+        $voucher->reservation?->makeHidden(['entry']);
+
+        $status = $this->stateMachine->statusOf($voucher);
+
+        $dateFormat = config('resrv-config.calculate_days_using_time') ? 'Y-m-d H:i' : 'Y-m-d';
+
+        return [
+            'voucher' => $voucher,
+            'reservation' => $voucher->reservation,
+            'status' => $status->value,
+            'status_banner' => $status->banner(),
+            'dates' => [
+                'start' => $voucher->reservation?->date_start?->format($dateFormat),
+                'end' => $voucher->reservation?->date_end?->format($dateFormat),
+            ],
+        ];
     }
 
     private function voucherFromToken(?string $token): ?Voucher
