@@ -11,12 +11,11 @@ class QrRenderer
 {
     public function png(string $payload, int $size = 320): string
     {
-        return Builder::create()
-            ->writer(new PngWriter)
-            ->data($payload)
-            ->size($size)
-            ->build()
-            ->getString();
+        return (new Builder(
+            writer: new PngWriter,
+            data: $payload,
+            size: $size,
+        ))->build()->getString();
     }
 
     public function pdf(Voucher $voucher, ?string $pngBytes = null): string
