@@ -18,10 +18,11 @@ it('returns 200 for lookup with a valid token', function () {
     $this->signInAdmin();
     $voucher = $this->makeIssuedVoucher();
 
-    $response = $this->postJson(cp_route('resrv-vouchers.lookup'), ['token' => $voucher->token]);
+    $response = $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => $voucher->token]);
 
     $response->assertOk()
         ->assertJsonPath('voucher.id', $voucher->id)
+        ->assertJsonPath('token', $voucher->token)
         ->assertJsonPath('status', VoucherStatus::Issued->value)
         ->assertJsonPath('status_banner.tone', 'success')
         ->assertJsonPath('dates.start', $voucher->reservation->date_start->format('Y-m-d'))
@@ -31,17 +32,78 @@ it('returns 200 for lookup with a valid token', function () {
         ->where('action', 'scan')->where('result', 'success')->exists())->toBeTrue();
 });
 
-it('returns 422 for lookup with an invalid token', function () {
+it('finds a voucher by reservation code', function () {
     $this->signInAdmin();
+    $voucher = $this->makeIssuedVoucher();
+    $this->makeIssuedVoucher();
 
-    $response = $this->postJson(cp_route('resrv-vouchers.lookup'), ['token' => 'not-a-valid-token']);
+    $response = $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => (string) $voucher->reservation_id]);
 
-    $response->assertStatus(422);
+    $response->assertOk()
+        ->assertJsonPath('voucher.id', $voucher->id)
+        ->assertJsonPath('token', $voucher->token);
+
+    expect(VoucherScan::query()->where('voucher_id', $voucher->id)
+        ->where('action', 'scan')->where('result', 'success')->exists())->toBeTrue();
+});
+
+it('finds a voucher by booking reference ignoring case and whitespace', function () {
+    $this->signInAdmin();
+    $voucher = $this->makeIssuedVoucher();
+    $this->makeIssuedVoucher();
+
+    $response = $this->postJson(cp_route('resrv-vouchers.lookup'), [
+        'query' => ' '.mb_strtolower($voucher->reservation->reference).' ',
+    ]);
+
+    $response->assertOk()->assertJsonPath('voucher.id', $voucher->id);
+});
+
+it('marks a voucher used with the token returned by a reservation-code lookup', function () {
+    $this->signInAdmin();
+    $voucher = $this->makeIssuedVoucher();
+
+    $token = $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => (string) $voucher->reservation_id])
+        ->assertOk()
+        ->json('token');
+
+    $this->patchJson(cp_route('resrv-vouchers.mark-used'), ['token' => $token])
+        ->assertOk()
+        ->assertJsonPath('status', VoucherStatus::Used->value);
+});
+
+it('returns 422 with a distinct message when the reservation exists but has no voucher', function () {
+    $this->signInAdmin();
+    $reservation = $this->makeConfirmedReservation();
+
+    $response = $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => (string) $reservation->id]);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('message', 'Reservation found, but it has no voucher.');
 
     expect(VoucherScan::query()->where('action', 'scan')->where('result', 'not-found')->exists())->toBeTrue();
 });
 
-it('returns 422 for lookup when no token is provided', function () {
+it('returns 422 for lookup with an invalid token', function () {
+    $this->signInAdmin();
+
+    $response = $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => 'not-a-valid-token']);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('message', 'No voucher matches that token, reservation code, or booking reference.');
+
+    expect(VoucherScan::query()->where('action', 'scan')->where('result', 'not-found')->exists())->toBeTrue();
+});
+
+it('returns 422 when no reservation matches a numeric query', function () {
+    $this->signInAdmin();
+
+    $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => '999999'])
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'No voucher matches that token, reservation code, or booking reference.');
+});
+
+it('returns 422 for lookup when no query is provided', function () {
     $this->signInAdmin();
 
     $response = $this->withExceptionHandling()
@@ -55,7 +117,7 @@ it('returns 403 for lookup when the user lacks the use resrv permission', functi
     $voucher = $this->makeIssuedVoucher();
 
     $this->withExceptionHandling()
-        ->postJson(cp_route('resrv-vouchers.lookup'), ['token' => $voucher->token])
+        ->postJson(cp_route('resrv-vouchers.lookup'), ['query' => $voucher->token])
         ->assertStatus(403);
 });
 

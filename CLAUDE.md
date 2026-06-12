@@ -68,7 +68,7 @@ The `VoucherStateMachine` service is the only thing that mutates voucher state; 
 
 ### Permissions & CP UI
 
-Reuses Resrv's existing `use resrv` permission — no new permission. CP nav lives under the "Resrv" section. CP scanner is a Vue 3 Inertia page + `html5-qrcode` with a text-input fallback when the camera is denied/absent.
+Reuses Resrv's existing `use resrv` permission — no new permission. CP nav lives under the "Resrv" section. CP scanner is a Vue 3 Inertia page + `html5-qrcode` with a text-input fallback (signed token, reservation id, or booking reference — the lookup endpoint resolves all three) when the camera is denied/absent.
 
 ## Testbench + Laravel Boost
 

@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 use Reach\StatamicResrvVouchers\Exceptions\InvalidVoucherTransitionException;
 use Reach\StatamicResrvVouchers\Models\Voucher;
@@ -78,15 +79,20 @@ class VoucherCpController extends Controller
 
     public function lookup(Request $request): JsonResponse
     {
-        $request->validate(['token' => ['required', 'string']]);
+        $request->validate(['query' => ['required', 'string']]);
 
         $userId = $this->userId();
-        $voucher = $this->voucherFromToken($request->input('token'));
+        $query = trim($request->input('query'));
+        $voucher = $this->resolveVoucher($query);
 
         if (! $voucher) {
             $this->logScan(null, $userId, 'scan', 'not-found', $request);
 
-            return response()->json(['message' => 'Invalid voucher token.'], 422);
+            $message = $this->reservationExists($query)
+                ? 'Reservation found, but it has no voucher.'
+                : 'No voucher matches that token, reservation code, or booking reference.';
+
+            return response()->json(['message' => $message], 422);
         }
 
         $status = $this->stateMachine->statusOf($voucher);
@@ -168,6 +174,8 @@ class VoucherCpController extends Controller
 
     // The scan card renders entirely from this payload, so transition responses must carry the
     // same shape as lookup — the page must not re-scan to refresh (it would pollute the audit log).
+    // The canonical token is exposed (despite being $hidden on the model) so reservation-code
+    // lookups can drive the token-only mark-used / un-mark endpoints.
     private function voucherPayload(Voucher $voucher): array
     {
         $voucher->load('reservation.customer');
@@ -179,6 +187,7 @@ class VoucherCpController extends Controller
 
         return [
             'voucher' => $voucher,
+            'token' => $voucher->token,
             'reservation' => $voucher->reservation,
             'status' => $status->value,
             'status_banner' => $status->banner(),
@@ -187,6 +196,34 @@ class VoucherCpController extends Controller
                 'end' => $voucher->reservation?->date_end?->format($dateFormat),
             ],
         ];
+    }
+
+    // Resolution order: signed token, then reservation id ("Reservation code" in the confirmation
+    // email), then booking reference. Tokens always contain a dot and references are alphanumeric,
+    // so only an all-digits reference can collide with an id — the id wins deterministically.
+    private function resolveVoucher(string $input): ?Voucher
+    {
+        if ($voucher = $this->voucherFromToken($input)) {
+            return $voucher;
+        }
+
+        if (ctype_digit($input) && $voucher = Voucher::query()->where('reservation_id', $input)->first()) {
+            return $voucher;
+        }
+
+        return Voucher::query()
+            ->whereHas('reservation', fn ($r) => $r->where('reference', mb_strtoupper($input)))
+            ->first();
+    }
+
+    private function reservationExists(string $input): bool
+    {
+        return Reservation::query()
+            ->where(function ($query) use ($input) {
+                $query->when(ctype_digit($input), fn ($q) => $q->where('id', $input))
+                    ->orWhere('reference', mb_strtoupper($input));
+            })
+            ->exists();
     }
 
     private function voucherFromToken(?string $token): ?Voucher

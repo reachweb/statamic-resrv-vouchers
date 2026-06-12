@@ -6,7 +6,7 @@ When a reservation is confirmed in a voucher-enabled collection, the addon:
 
 - Generates a signed-token QR code for the reservation.
 - Attaches an inline PNG (for the email body) and a single-page PDF to Resrv's existing confirmation email.
-- Exposes a CP page where staff can scan the QR with a phone camera (or paste the token manually), validate the voucher, and mark it used.
+- Exposes a CP page where staff can scan the QR with a phone camera (or look the voucher up by reservation code, booking reference, or pasted token), validate it, and mark it used.
 - Sends a "thank you for attending" email when the voucher is marked used (when the customer has an email on file).
 - Invalidates the voucher when the underlying reservation is cancelled, refunded, or expires.
 
@@ -21,7 +21,7 @@ When a reservation is confirmed in a voucher-enabled collection, the addon:
 
 ## How it works
 
-The addon is purely event-driven and never modifies Resrv. When Resrv confirms a reservation, a queued listener issues exactly one voucher per reservation (re-fired events are a no-op). While Resrv builds its confirmation email, a synchronous listener attaches the voucher PDF and embeds the inline QR PNG into that same mailable — there is no separate voucher email. At the venue, staff scan the QR (or paste the token) on a CP page; marking the voucher used triggers the attended email. Cancelling, refunding, or expiring the reservation invalidates the voucher, and any voucher past `date_end + grace_days` reports as expired on its own.
+The addon is purely event-driven and never modifies Resrv. When Resrv confirms a reservation, a queued listener issues exactly one voucher per reservation (re-fired events are a no-op). While Resrv builds its confirmation email, a synchronous listener attaches the voucher PDF and embeds the inline QR PNG into that same mailable — there is no separate voucher email. At the venue, staff scan the QR (or look the voucher up by reservation code or booking reference) on a CP page; marking the voucher used triggers the attended email. Cancelling, refunding, or expiring the reservation invalidates the voucher, and any voucher past `date_end + grace_days` reports as expired on its own.
 
 ## Installation
 
@@ -95,7 +95,7 @@ To customize the "attended" email's subject, from, or markdown template, set the
 Both CP pages live under the **Resrv → Vouchers** nav section and require the `use resrv` permission:
 
 - **Vouchers / List** (`/cp/resrv-vouchers`) — a standard CP listing (sorted by issue date, newest first) with columns for ID, status, reservation reference, customer, expiry, used-at, and issued-at. It supports a pinned status filter (with active-filter badge), search by voucher ID or reservation reference, column sorting, per-user column preferences, and pagination. Re-sending the confirmation email (with the voucher attached) is available through the internal resend endpoint (see [Developer reference](#developer-reference)); it goes through Resrv's email dispatcher and honors Resrv's reservation-email settings, so if the confirmation email is disabled there the resend fails with *"Email could not be sent."* A per-row resend action in the listing is planned.
-- **Vouchers / Scan** (`/cp/resrv-vouchers/scan`) — an html5-qrcode camera scanner plus an *"Or paste a token"* text fallback with a **Validate** button. The camera does not auto-start: staff press **Start camera** (manual token entry never needs camera permission), and **Stop camera** / **Switch camera** buttons appear while it runs (the latter only when the device has more than one camera). On a successful decode the page shows a result card: status badge, a color-coded banner (*"Voucher is valid."* / *"Voucher has already been used."* / *"Voucher has been invalidated."* / *"Voucher has expired."*), and the reservation's reference, guest name, dates, and quantity. Buttons gate by status: **Mark as used** when the voucher is `issued`, **Un-mark** when it is `used`, **Scan another** always — the card updates directly from the action's response, so a mark-used/un-mark never writes an extra scan row to the audit log.
+- **Vouchers / Scan** (`/cp/resrv-vouchers/scan`) — an html5-qrcode camera scanner plus a text fallback with a **Find voucher** button. The fallback accepts whatever the guest can read off their confirmation email — the numeric **reservation code** or the six-character **booking reference** — as well as a raw pasted token; matching is exact (use the Vouchers list for fuzzy search), case-insensitive for references, whitespace is trimmed, and Enter submits, so a USB (keyboard-wedge) barcode scanner pointed at the field works without any camera. The camera does not auto-start: staff press **Start camera** (manual entry never needs camera permission), and **Stop camera** / **Switch camera** buttons appear while it runs (the latter only when the device has more than one camera). On a successful decode or lookup the page shows a result card: status badge, a color-coded banner (*"Voucher is valid."* / *"Voucher has already been used."* / *"Voucher has been invalidated."* / *"Voucher has expired."*), and the reservation's reference, guest name, dates, and quantity. Buttons gate by status: **Mark as used** when the voucher is `issued`, **Un-mark** when it is `used`, **Scan another** always — the card updates directly from the action's response, so a mark-used/un-mark never writes an extra scan row to the audit log.
 
 Every lookup, mark-used, un-mark, and resend is audit-logged — see [Developer reference](#developer-reference).
 
@@ -116,7 +116,7 @@ Voucher generation and the attended email run on the queue — see [Requirements
 
 - **Vouchers aren't generated / attended emails don't arrive** — no queue worker is running. Start one (`php artisan queue:work`) or set `QUEUE_CONNECTION=sync`.
 - **"Mark as used" returns an error on a valid-looking voucher** — the voucher is past `expires_at` (lazily expired) or has been invalidated; neither can be marked used. Check the status banner on the scan result.
-- **Camera access blocked on `http://`** — browsers require HTTPS (or `localhost`) for `getUserMedia`. Deploy behind TLS or use the manual token-input fallback.
+- **Camera access blocked on `http://`** — browsers require HTTPS (or `localhost`) for `getUserMedia`. Deploy behind TLS or use the manual entry fallback (reservation code, booking reference, or token).
 - **`npm run cp:build` errors about `@statamic/cms` not found** — the file: dep resolves from the host site's `vendor/` (`file:../../../vendor/statamic/cms/resources/dist-package`). Run `composer install` in the host first, then `npm install --install-links` so npm copies the package rather than symlinking it (transitive deps like `@vitejs/plugin-vue` resolve from the addon's own `node_modules` only when copied).
 - **Email arrives without the inline QR but with the PDF attachment** — you have not published / included the QR snippet in Resrv's confirmation template. The PDF attachment is always sent regardless. Add `@include('statamic-resrv-vouchers::email.vouchers.partials.qr')` to your published `confirmed.blade.php`.
 - **Voucher generation seems to be missing for some reservations** — confirm the reservation's collection handle is listed in `config/resrv-vouchers.php` `enabled_collections`. Vouchers are silently skipped for any reservation whose entry lives outside that list.
@@ -140,7 +140,7 @@ The addon's integration surface with Resrv is consumed, never modified: it liste
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/cp/resrv-vouchers/list` | Paginated voucher JSON for the listing |
-| POST | `/cp/resrv-vouchers/lookup` | Validate a token, return voucher + reservation + status banner |
+| POST | `/cp/resrv-vouchers/lookup` | Find a voucher by signed token, reservation code, or booking reference (`query` param); returns voucher + reservation + status banner + canonical token |
 | PATCH | `/cp/resrv-vouchers/mark-used` | Transition `issued` → `used` |
 | PATCH | `/cp/resrv-vouchers/un-mark` | Transition `used` → `issued` |
 | POST | `/cp/resrv-vouchers/resend/{voucher}` | Re-send the confirmation email with the voucher attached |

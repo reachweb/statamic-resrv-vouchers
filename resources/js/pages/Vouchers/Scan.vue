@@ -18,6 +18,7 @@ const currentCameraIndex = ref(0);
 const scannerError = ref('');
 
 const state = reactive({
+    query: '',
     token: '',
     result: null,
     pending: false,
@@ -82,25 +83,28 @@ async function switchCamera() {
 }
 
 async function onDecoded(decoded) {
-    if (state.pending || decoded === state.token) {
+    if (state.pending || decoded === state.query) {
         return;
     }
-    state.token = decoded;
+    state.query = decoded;
     await lookup();
 }
 
 async function lookup() {
-    if (!state.token) {
-        state.flash = 'Enter or scan a token first.';
+    const query = state.query.trim();
+    if (!query) {
+        state.flash = 'Enter a reservation code, booking reference, or token first.';
         return;
     }
     state.pending = true;
     state.flash = '';
     try {
-        const { data } = await axios.post(props.lookupUrl, { token: state.token });
+        const { data } = await axios.post(props.lookupUrl, { query });
         state.result = data;
+        state.token = data.token;
     } catch (e) {
         state.result = null;
+        state.token = '';
         state.flash = e?.response?.data?.message ?? 'Lookup failed.';
     } finally {
         state.pending = false;
@@ -134,6 +138,7 @@ async function unMark() {
 }
 
 function scanAnother() {
+    state.query = '';
     state.token = '';
     state.result = null;
     state.flash = '';
@@ -163,13 +168,13 @@ onBeforeUnmount(() => {
                 </Button>
             </div>
 
-            <Field :label="__('Or paste a token')">
-                <Input v-model="state.token" placeholder="paste / type token" />
+            <Field :label="__('Or find by reservation code, booking reference, or token')">
+                <Input v-model="state.query" placeholder="e.g. 1052 or AB12CD" @keyup.enter="lookup" />
             </Field>
 
             <div class="mt-3 flex gap-2">
-                <Button :disabled="state.pending" @click="lookup">{{ __('Validate') }}</Button>
-                <Button variant="ghost" @click="scanAnother">{{ __('Scan another') }}</Button>
+                <Button :disabled="state.pending" @click="lookup">{{ __('Find voucher') }}</Button>
+                <Button variant="ghost" @click="scanAnother">{{ __('Clear') }}</Button>
             </div>
 
             <p v-if="state.flash" class="mt-3 text-sm text-orange-600">{{ state.flash }}</p>
