@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Models\VoucherScan;
 
@@ -25,6 +26,8 @@ it('returns 200 for lookup with a valid token', function () {
         ->assertJsonPath('token', $voucher->token)
         ->assertJsonPath('status', VoucherStatus::Issued->value)
         ->assertJsonPath('status_banner.tone', 'success')
+        ->assertJsonPath('entry_title', 'Test Item')
+        ->assertJsonPath('rate', null)
         ->assertJsonPath('dates.start', $voucher->reservation->date_start->format('Y-m-d'))
         ->assertJsonPath('dates.end', $voucher->reservation->date_end->format('Y-m-d'));
 
@@ -45,6 +48,18 @@ it('finds a voucher by reservation code', function () {
 
     expect(VoucherScan::query()->where('voucher_id', $voucher->id)
         ->where('action', 'scan')->where('result', 'success')->exists())->toBeTrue();
+});
+
+it('includes the rate label when the reservation was booked with a rate', function () {
+    $this->signInAdmin();
+    $voucher = $this->makeIssuedVoucher();
+
+    $rate = Rate::create(['collection' => 'pages', 'title' => 'Early Bird', 'slug' => 'early-bird']);
+    $voucher->reservation->update(['rate_id' => $rate->id]);
+
+    $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => $voucher->token])
+        ->assertOk()
+        ->assertJsonPath('rate', 'Early Bird');
 });
 
 it('finds a voucher by booking reference ignoring case and whitespace', function () {

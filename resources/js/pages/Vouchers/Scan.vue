@@ -180,6 +180,14 @@ onBeforeUnmount(() => {
             />
 
             <dl v-if="state.result.reservation" class="mt-4 grid grid-cols-2 gap-2 text-sm">
+                <template v-if="state.result.entry_title">
+                    <dt class="font-medium">{{ __('Entry') }}</dt>
+                    <dd>{{ state.result.entry_title }}</dd>
+                </template>
+                <template v-if="state.result.rate">
+                    <dt class="font-medium">{{ __('Rate') }}</dt>
+                    <dd>{{ state.result.rate }}</dd>
+                </template>
                 <dt class="font-medium">{{ __('Reference') }}</dt>
                 <dd>{{ state.result.reservation.reference }}</dd>
                 <dt class="font-medium">{{ __('Guest') }}</dt>
@@ -194,10 +202,10 @@ onBeforeUnmount(() => {
             </dl>
 
             <div class="mt-4 flex gap-2">
-                <Button v-if="state.result.status === 'issued'" :disabled="state.pending" @click="markUsed">
+                <Button v-if="state.result.status === 'issued'" variant="primary" :disabled="state.pending" @click="markUsed">
                     {{ __('Mark as used') }}
                 </Button>
-                <Button variant="ghost" @click="scanAnother">{{ __('Scan another') }}</Button>
+                <Button variant="primary" @click="scanAnother">{{ __('Scan another') }}</Button>
             </div>
         </CardPanel>
     </div>

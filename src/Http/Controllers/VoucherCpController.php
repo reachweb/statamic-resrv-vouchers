@@ -181,11 +181,33 @@ class VoucherCpController extends Controller
             'reservation' => $voucher->reservation,
             'status' => $status->value,
             'status_banner' => $status->banner(),
+            'entry_title' => $this->entryTitle($voucher->reservation),
+            'rate' => $this->rateLabel($voucher->reservation),
             'dates' => [
                 'start' => $voucher->reservation?->date_start?->format($dateFormat),
                 'end' => $voucher->reservation?->date_end?->format($dateFormat),
             ],
         ];
+    }
+
+    private function entryTitle(?Reservation $reservation): ?string
+    {
+        $title = $reservation?->entry['title'] ?? null;
+
+        return $title !== null ? (string) $title : null;
+    }
+
+    // Parent (multi-) reservations carry rates on their children, not on the parent row.
+    private function rateLabel(?Reservation $reservation): ?string
+    {
+        if (! $reservation) {
+            return null;
+        }
+
+        $hasRate = $reservation->rate_id !== null
+            || $reservation->childs->contains(fn ($child) => $child->rate_id !== null);
+
+        return $hasRate ? $reservation->getRateLabel() : null;
     }
 
     // Resolution order: signed token, then reservation id ("Reservation code" in the confirmation

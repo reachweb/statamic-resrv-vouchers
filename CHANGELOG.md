@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- The scan result card now shows the purchased entry's title and, when the reservation was booked with a rate, the rate label.
+
+### Changed
+
+- "Mark as used" and "Scan another" on the scan result card are now primary buttons.
+
 ### Breaking
 
 - The un-mark flow has been removed: marking a voucher as used is now final. Gone are the CP "Un-mark" button, the `PATCH /cp/resrv-vouchers/un-mark` endpoint, `VoucherStateMachine::unMark()`, and the `VoucherUnmarked` event. Existing `un-mark` rows in the `resrv_voucher_scans` audit table are unaffected.
