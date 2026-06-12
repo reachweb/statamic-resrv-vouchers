@@ -37,7 +37,7 @@
 | Cancel/refund | Listener invalidates voucher |
 | Expiration | `reservation.date_end + grace_days` (default 1) — lazy-checked |
 | Email templates | Publishable markdown |
-| Permission | Reuse Resrv's `use resrv` (no new permission) |
+| Permission | Dedicated `use resrv vouchers` permission in its own group — `use resrv` alone does not grant voucher access (changed 2026-06-12 with user sign-off; originally: reuse Resrv's `use resrv`) |
 | Scan UX | Always show reservation details + status banner |
 | Audit | Separate `resrv_voucher_scans` table |
 | QR PHP lib | `endroid/qr-code` v5 |
@@ -628,7 +628,6 @@ All 11 reported issues verified valid against the code before fixing. Decisions:
 - Public-facing (non-CP) "scan my own ticket" page.
 - Voucher transfer between customers.
 - Custom voucher artwork / branded PDF layouts beyond a simple QR + summary.
-- A separate `use resrv-vouchers` permission.
 - Replacing Resrv's confirmation template (instead, we provide an `@include` snippet).
 - A v5 release line — the addon ships v6-only. Hosts still on Statamic 5 use the v5-era Resrv without vouchers.
 - `UserConfig.php` + settings blueprint — the current config keys are developer-managed; revisit if user-facing settings appear.
@@ -717,3 +716,4 @@ TU.5 done 2026-06-11: .gitignore now excludes only resources/dist/hot (was the w
 TU.6 done 2026-06-11: README CP-usage section updated — scan camera is click-to-start (Start/Stop/Switch buttons), card refreshes from the action response (no extra audit row), listing described per the rebuilt protocol (status filter + badge, search, column prefs); dropped the false "Each row has a Resend email action" claim (row action never shipped — now explicitly deferred as TU.7, endpoint documented in Developer reference). CLAUDE.md: dist-commit convention added to repo rules; sibling-addon note mentions the boot guard stopgap.
 TU.8 done 2026-06-11: reachweb/statamic-resrv `*` → `^6.0` — Resrv v6.0.0 tagged (verified the tag ships src/Events/BuildingReservationEmail.php) and published on Packagist. The local path repo now carries options.versions = 6.x-dev so the symlinked sibling satisfies ^6.0 from any branch (also stops the lock recording transient branch names like dev-fix/duplicated-entries). Boot guard kept as defense-in-depth. Pest 69/201 green; pint clean.
 TU.10 done 2026-06-12: lookup param token → query; controller resolveVoucher() tries HMAC verify, then reservation_id (ctype_digit-guarded so Postgres never sees a non-numeric bigint comparison), then reference (mb_strtoupper, matching Resrv's Str::upper(Str::random(6)) format; an all-digit reference loses to an id match deterministically). voucherPayload() now carries the canonical token (model keeps it $hidden so the Index listing never serializes it) — Scan.vue adopts it after every lookup, so PATCH endpoints stay strict-token. Distinct 422 "Reservation found, but it has no voucher." via a Reservation::exists probe. Scan.vue: state.query/state.token split, server-trimmed input, @keyup.enter submit (keyboard-wedge scanner support), buttons renamed Find voucher / Clear. 5 new tests (id lookup, case+whitespace reference, id-lookup→mark-used roundtrip, voucherless reservation message, numeric miss). README + CLAUDE.md updated; fresh cp:build dist. Pest 74/217 green; pint clean.
+Permissions done 2026-06-12: CP access switched from Resrv's 'use resrv' to a dedicated 'use resrv vouchers' permission (own statamic-resrv-vouchers group), registered in VouchersProvider::bootPermissions() via Permission::extend — NOT $this->app->booted(), which in Statamic 6 fires immediately and re-queues during bootAddon(), double-registering (same bug just fixed in Resrv's ResrvProvider). routes/cp.php middleware + all three nav ->can() switched. Hard switch per user decision: 'use resrv' alone now 403s on voucher routes (addon untagged, so no public break — noted in README + new CHANGELOG.md). TestCase: + signInWithPermissions() role helper (mirrors Resrv's CpRoutePermissionTest), signInUserWithoutResrvPermission renamed signInUserWithoutPermissions. New CpPermissionTest: vouchers-only role reaches all CP routes, use-resrv-only role 403s (asserted via JSON requests — HTML GETs 302 to Statamic's unauthorized page), supers pass, Permission::boot()->tree() exactly-once regression guard. Pest 78/230 green; pint clean.

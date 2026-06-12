@@ -2,7 +2,7 @@
 
 use Reach\StatamicResrvVouchers\Http\Controllers\VoucherCpController;
 
-Route::middleware('can:use resrv')
+Route::middleware('can:use resrv vouchers')
     ->name('resrv-vouchers.')
     ->prefix('resrv-vouchers')
     ->group(function () {

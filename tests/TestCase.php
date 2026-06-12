@@ -14,6 +14,7 @@ use Reach\StatamicResrvVouchers\StatamicResrvVouchersServiceProvider;
 use Statamic\Addons\Manifest;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Role;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
 use Statamic\Support\Str;
@@ -87,10 +88,24 @@ abstract class TestCase extends AddonTestCase
         return $user;
     }
 
-    protected function signInUserWithoutResrvPermission()
+    protected function signInUserWithoutPermissions()
     {
         $user = User::make();
         $user->id(2)->email('plain@test.com');
+        $this->be($user);
+
+        return $user;
+    }
+
+    protected function signInWithPermissions(array $permissions)
+    {
+        $role = Role::make('role_'.Str::random(8))->addPermission($permissions)->save();
+
+        $user = User::make()
+            ->id('user-'.Str::random(8))
+            ->email(Str::random(8).'@test.com')
+            ->assignRole($role);
+
         $this->be($user);
 
         return $user;

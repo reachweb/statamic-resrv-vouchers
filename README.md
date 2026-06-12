@@ -16,7 +16,7 @@ When a reservation is confirmed in a voucher-enabled collection, the addon:
 - **PHP** 8.4+ — the Vouchers package itself allows 8.3, but Resrv v6 requires 8.4, so that is the effective floor.
 - **Laravel** 12.x or 13.x
 - **Resrv** v6. It ships the `Reach\StatamicResrv\Events\BuildingReservationEmail` event the addon listens to in order to attach the QR / PDF to the confirmation mailable.
-- **`use resrv` permission** for any CP user who should scan, list, or resend vouchers. No new permission is introduced — the addon piggy-backs on Resrv's existing one.
+- **`use resrv vouchers` permission** for any CP user who should scan, list, or resend vouchers. The addon registers it in its own "Resrv Vouchers" permission group, so voucher access is grantable independently of Resrv — note that Resrv's `use resrv` permission does **not** grant voucher access.
 - **A running queue worker.** Voucher generation and the attended email are queued jobs. Without a worker no vouchers are created and no attended emails go out — alternatively set `QUEUE_CONNECTION=sync` for fully synchronous behavior.
 
 ## How it works
@@ -92,7 +92,7 @@ To customize the "attended" email's subject, from, or markdown template, set the
 
 ## CP usage
 
-Both CP pages live under the **Resrv → Vouchers** nav section and require the `use resrv` permission:
+Both CP pages live under the **Resrv → Vouchers** nav section and require the `use resrv vouchers` permission:
 
 - **Vouchers / List** (`/cp/resrv-vouchers`) — a standard CP listing (sorted by issue date, newest first) with columns for ID, status, reservation reference, customer, expiry, used-at, and issued-at. It supports a pinned status filter (with active-filter badge), search by voucher ID or reservation reference, column sorting, per-user column preferences, and pagination. Re-sending the confirmation email (with the voucher attached) is available through the internal resend endpoint (see [Developer reference](#developer-reference)); it goes through Resrv's email dispatcher and honors Resrv's reservation-email settings, so if the confirmation email is disabled there the resend fails with *"Email could not be sent."* A per-row resend action in the listing is planned.
 - **Vouchers / Scan** (`/cp/resrv-vouchers/scan`) — an html5-qrcode camera scanner plus a text fallback with a **Find voucher** button. The fallback accepts whatever the guest can read off their confirmation email — the numeric **reservation code** or the six-character **booking reference** — as well as a raw pasted token; matching is exact (use the Vouchers list for fuzzy search), case-insensitive for references, whitespace is trimmed, and Enter submits, so a USB (keyboard-wedge) barcode scanner pointed at the field works without any camera. The camera does not auto-start: staff press **Start camera** (manual entry never needs camera permission), and **Stop camera** / **Switch camera** buttons appear while it runs (the latter only when the device has more than one camera). On a successful decode or lookup the page shows a result card: status badge, a color-coded banner (*"Voucher is valid."* / *"Voucher has already been used."* / *"Voucher has been invalidated."* / *"Voucher has expired."*), and the reservation's reference, guest name, dates, and quantity. Buttons gate by status: **Mark as used** when the voucher is `issued`, **Un-mark** when it is `used`, **Scan another** always — the card updates directly from the action's response, so a mark-used/un-mark never writes an extra scan row to the audit log.
@@ -135,7 +135,7 @@ The addon's integration surface with Resrv is consumed, never modified: it liste
 
 **Voucher table** — `resrv_vouchers`: string UUID primary key, unique `reservation_id` (the one-voucher-per-reservation guarantee) and `token`, indexed `status`, `expires_at`, `used_at` / `used_by_user_id`, `invalidated_reason`.
 
-**CP endpoints** (internal — may change without notice; all behind `can:use resrv`):
+**CP endpoints** (internal — may change without notice; all behind `can:use resrv vouchers`):
 
 | Method | Path | Purpose |
 | --- | --- | --- |

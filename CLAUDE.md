@@ -68,7 +68,7 @@ The `VoucherStateMachine` service is the only thing that mutates voucher state; 
 
 ### Permissions & CP UI
 
-Reuses Resrv's existing `use resrv` permission — no new permission. CP nav lives under the "Resrv" section. CP scanner is a Vue 3 Inertia page + `html5-qrcode` with a text-input fallback (signed token, reservation id, or booking reference — the lookup endpoint resolves all three) when the camera is denied/absent.
+The addon registers its own `use resrv vouchers` permission in a dedicated `statamic-resrv-vouchers` permission group (`VouchersProvider::bootPermissions()`), so voucher access is grantable independently of Resrv — Resrv's `use resrv` does **not** grant voucher access. Registration goes through `Permission::extend()`; never `$this->app->booted()` — in Statamic 6 `bootAddon()` runs while the booted-callbacks array is being iterated, so `booted()` fires the callback immediately *and* re-queues it, registering the permission twice (`CpPermissionTest` carries the exactly-once regression guard). CP nav lives under the "Resrv" section. CP scanner is a Vue 3 Inertia page + `html5-qrcode` with a text-input fallback (signed token, reservation id, or booking reference — the lookup endpoint resolves all three) when the camera is denied/absent.
 
 ## Testbench + Laravel Boost
 
@@ -90,4 +90,4 @@ Laravel Boost (dev dep) auto-discovers through Boost's own service provider. `ve
 
 ## Out of scope (don't implement without re-asking)
 
-Multiple QRs per reservation, public "scan my own ticket" page, voucher transfer between customers, branded PDF layouts beyond a simple QR + summary, a separate `use resrv-vouchers` permission, replacing Resrv's confirmation template (we ship an `@include` snippet instead). The full list is at the bottom of [tasks.md](tasks.md).
+Multiple QRs per reservation, public "scan my own ticket" page, voucher transfer between customers, branded PDF layouts beyond a simple QR + summary, replacing Resrv's confirmation template (we ship an `@include` snippet instead). The full list is at the bottom of [tasks.md](tasks.md).

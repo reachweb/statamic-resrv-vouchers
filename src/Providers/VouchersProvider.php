@@ -17,6 +17,7 @@ use Reach\StatamicResrvVouchers\Listeners\SendAttendedEmailOnVoucherUsed;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
 use RuntimeException;
 use Statamic\Facades\CP\Nav;
+use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
 
 class VouchersProvider extends AddonServiceProvider
@@ -100,7 +101,25 @@ class VouchersProvider extends AddonServiceProvider
             __DIR__.'/../../resources/lang' => lang_path('vendor/statamic-resrv-vouchers'),
         ], 'resrv-vouchers-language');
 
+        $this->bootPermissions();
+
         $this->createNavigation();
+    }
+
+    private function bootPermissions(): void
+    {
+        // Via Permission::extend, never $this->app->booted() — in Statamic 6 bootAddon()
+        // runs while the booted callbacks are iterating, so booted() fires the callback
+        // immediately AND re-queues it, registering the permission twice.
+        Permission::extend(function () {
+            Permission::group('statamic-resrv-vouchers', 'Resrv Vouchers Permissions', function () {
+                Permission::register('use resrv vouchers', function ($permission) {
+                    $permission
+                        ->label(__('Use Resrv Vouchers'))
+                        ->description(__('Allow usage of the Resrv Vouchers addon'));
+                });
+            });
+        });
     }
 
     private function createNavigation(): void
@@ -108,15 +127,15 @@ class VouchersProvider extends AddonServiceProvider
         Nav::extend(function ($nav) {
             $nav->create(__('Vouchers'))
                 ->section('Resrv')
-                ->can('use resrv')
+                ->can('use resrv vouchers')
                 ->route('resrv-vouchers.index')
                 ->children([
                     $nav->item(__('List'))
                         ->route('resrv-vouchers.index')
-                        ->can('use resrv'),
+                        ->can('use resrv vouchers'),
                     $nav->item(__('Scan'))
                         ->route('resrv-vouchers.scan')
-                        ->can('use resrv'),
+                        ->can('use resrv vouchers'),
                 ]);
         });
     }

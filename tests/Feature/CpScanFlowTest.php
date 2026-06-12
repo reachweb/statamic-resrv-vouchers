@@ -112,8 +112,8 @@ it('returns 422 for lookup when no query is provided', function () {
     $response->assertStatus(422);
 });
 
-it('returns 403 for lookup when the user lacks the use resrv permission', function () {
-    $this->signInUserWithoutResrvPermission();
+it('returns 403 for lookup when the user lacks the vouchers permission', function () {
+    $this->signInUserWithoutPermissions();
     $voucher = $this->makeIssuedVoucher();
 
     $this->withExceptionHandling()
@@ -166,7 +166,7 @@ it('un-marks a used voucher and audit-logs the action', function () {
 });
 
 it('returns 403 for mark-used when the user lacks the permission', function () {
-    $this->signInUserWithoutResrvPermission();
+    $this->signInUserWithoutPermissions();
     $voucher = $this->makeIssuedVoucher();
 
     $this->withExceptionHandling()
