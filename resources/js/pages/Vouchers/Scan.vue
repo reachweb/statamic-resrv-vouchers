@@ -7,7 +7,6 @@ import { Alert, Badge, Button, CardPanel, Field, Header, Heading, Input } from '
 const props = defineProps({
     lookupUrl: { type: String, required: true },
     markUsedUrl: { type: String, required: true },
-    unMarkUrl: { type: String, required: true },
 });
 
 const scanner = ref(null);
@@ -124,19 +123,6 @@ async function markUsed() {
     }
 }
 
-async function unMark() {
-    state.pending = true;
-    state.flash = '';
-    try {
-        const { data } = await axios.patch(props.unMarkUrl, { token: state.token });
-        state.result = data;
-    } catch (e) {
-        state.flash = e?.response?.data?.message ?? 'Could not un-mark.';
-    } finally {
-        state.pending = false;
-    }
-}
-
 function scanAnother() {
     state.query = '';
     state.token = '';
@@ -210,9 +196,6 @@ onBeforeUnmount(() => {
             <div class="mt-4 flex gap-2">
                 <Button v-if="state.result.status === 'issued'" :disabled="state.pending" @click="markUsed">
                     {{ __('Mark as used') }}
-                </Button>
-                <Button v-if="state.result.status === 'used'" variant="ghost" :disabled="state.pending" @click="unMark">
-                    {{ __('Un-mark') }}
                 </Button>
                 <Button variant="ghost" @click="scanAnother">{{ __('Scan another') }}</Button>
             </div>

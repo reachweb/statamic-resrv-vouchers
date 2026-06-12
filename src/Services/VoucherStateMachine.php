@@ -4,7 +4,6 @@ namespace Reach\StatamicResrvVouchers\Services;
 
 use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Events\VoucherInvalidated;
-use Reach\StatamicResrvVouchers\Events\VoucherUnmarked;
 use Reach\StatamicResrvVouchers\Events\VoucherUsed;
 use Reach\StatamicResrvVouchers\Exceptions\InvalidVoucherTransitionException;
 use Reach\StatamicResrvVouchers\Models\Voucher;
@@ -31,19 +30,6 @@ class VoucherStateMachine
         ])->save();
 
         VoucherUsed::dispatch($voucher, $userId);
-    }
-
-    public function unMark(Voucher $voucher, ?string $userId): void
-    {
-        $this->guardTransition($voucher, [VoucherStatus::Used], VoucherStatus::Issued);
-
-        $voucher->forceFill([
-            'status' => VoucherStatus::Issued,
-            'used_at' => null,
-            'used_by_user_id' => null,
-        ])->save();
-
-        VoucherUnmarked::dispatch($voucher, $userId);
     }
 
     public function invalidate(Voucher $voucher, string $reason): void

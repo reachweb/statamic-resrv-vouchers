@@ -149,22 +149,6 @@ it('returns 422 when marking used a voucher that is already used', function () {
     $this->patchJson(cp_route('resrv-vouchers.mark-used'), ['token' => $voucher->token])->assertStatus(422);
 });
 
-it('un-marks a used voucher and audit-logs the action', function () {
-    $this->signInAdmin();
-    $voucher = $this->makeIssuedVoucher();
-    $this->patchJson(cp_route('resrv-vouchers.mark-used'), ['token' => $voucher->token])->assertOk();
-
-    $response = $this->patchJson(cp_route('resrv-vouchers.un-mark'), ['token' => $voucher->token]);
-
-    $response->assertOk()
-        ->assertJsonPath('status', VoucherStatus::Issued->value)
-        ->assertJsonPath('status_banner.tone', 'success');
-    expect($voucher->fresh()->status)->toBe(VoucherStatus::Issued);
-
-    expect(VoucherScan::query()->where('voucher_id', $voucher->id)
-        ->where('action', 'un-mark')->where('result', 'success')->exists())->toBeTrue();
-});
-
 it('returns 403 for mark-used when the user lacks the permission', function () {
     $this->signInUserWithoutPermissions();
     $voucher = $this->makeIssuedVoucher();
@@ -224,7 +208,6 @@ it('renders the CP scan page as Inertia with mutation URLs as props', function (
             ->component('resrv-vouchers::Vouchers/Scan')
             ->where('lookupUrl', cp_route('resrv-vouchers.lookup'))
             ->where('markUsedUrl', cp_route('resrv-vouchers.mark-used'))
-            ->where('unMarkUrl', cp_route('resrv-vouchers.un-mark'))
         );
 });
 

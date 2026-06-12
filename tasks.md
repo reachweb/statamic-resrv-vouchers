@@ -33,7 +33,7 @@
 | Token | UUID v4 + HMAC-SHA256, base64url-encoded |
 | Attachments | Inline PNG (CID) + PDF |
 | Enabled collections | `config/resrv-vouchers.php` array `enabled_collections` |
-| Reversibility | Admin can un-mark used (audit-logged) |
+| Reversibility | **None — marking used is final.** The un-mark flow (CP button, endpoint, `unMark()`, `VoucherUnmarked`) was removed 2026-06-12 per user decision; originally shipped as an audit-logged un-mark. |
 | Cancel/refund | Listener invalidates voucher |
 | Expiration | `reservation.date_end + grace_days` (default 1) — lazy-checked |
 | Email templates | Publishable markdown |
@@ -605,7 +605,7 @@ All 11 reported issues verified valid against the code before fixing. Decisions:
 
 - [x] **TU.8 Constrain `reachweb/statamic-resrv` to `^6.0`** (replaces the `*` + boot-guard stopgap).
 
-- [ ] **TU.9 Re-run the real-site UAT (mylos)** — list renders with filters/sort/search/columns; scan flow incl. mark-used/un-mark from PATCH response (incl. a lookup by reservation code); no endroid deprecations in queue output; fresh `composer require` gets working CP assets.
+- [ ] **TU.9 Re-run the real-site UAT (mylos)** — list renders with filters/sort/search/columns; scan flow incl. mark-used from PATCH response (incl. a lookup by reservation code; verify no un-mark button renders on a used voucher); no endroid deprecations in queue output; fresh `composer require` gets working CP assets.
 
 - [x] **TU.10 Scan-page lookup by reservation code / booking reference** — the token-paste fallback was unusable at the door (~80 chars of base64). The lookup endpoint now takes a single `query` and resolves it as signed token → reservation id ("Reservation code" in the confirmation email) → booking reference (exact, case-insensitive, trimmed). The payload exposes the canonical token so mark-used/un-mark stay token-only; "reservation found but has no voucher" gets a distinct 422 message; Enter submits the field (keyboard-wedge scanners work).
 
@@ -620,7 +620,7 @@ All 11 reported issues verified valid against the code before fixing. Decisions:
 - `/cp/resrv-vouchers/scan` and `/cp/resrv-vouchers` both render as Inertia pages (no Blade fallback) on a v6 host site.
 - Scanning a QR displays the reservation; "Mark as used" flips status, sends the attended email, audit-logs the action.
 - Cancellation/refund invalidates the voucher; expired vouchers report as expired without a cron.
-- A second admin can "Un-mark" a used voucher without triggering a new customer email.
+- Marking used is terminal — no un-mark exists in the CP, the routes, or the state machine (removed 2026-06-12).
 
 ## Out of scope (do not implement without re-asking the user)
 
@@ -717,3 +717,4 @@ TU.6 done 2026-06-11: README CP-usage section updated — scan camera is click-t
 TU.8 done 2026-06-11: reachweb/statamic-resrv `*` → `^6.0` — Resrv v6.0.0 tagged (verified the tag ships src/Events/BuildingReservationEmail.php) and published on Packagist. The local path repo now carries options.versions = 6.x-dev so the symlinked sibling satisfies ^6.0 from any branch (also stops the lock recording transient branch names like dev-fix/duplicated-entries). Boot guard kept as defense-in-depth. Pest 69/201 green; pint clean.
 TU.10 done 2026-06-12: lookup param token → query; controller resolveVoucher() tries HMAC verify, then reservation_id (ctype_digit-guarded so Postgres never sees a non-numeric bigint comparison), then reference (mb_strtoupper, matching Resrv's Str::upper(Str::random(6)) format; an all-digit reference loses to an id match deterministically). voucherPayload() now carries the canonical token (model keeps it $hidden so the Index listing never serializes it) — Scan.vue adopts it after every lookup, so PATCH endpoints stay strict-token. Distinct 422 "Reservation found, but it has no voucher." via a Reservation::exists probe. Scan.vue: state.query/state.token split, server-trimmed input, @keyup.enter submit (keyboard-wedge scanner support), buttons renamed Find voucher / Clear. 5 new tests (id lookup, case+whitespace reference, id-lookup→mark-used roundtrip, voucherless reservation message, numeric miss). README + CLAUDE.md updated; fresh cp:build dist. Pest 74/217 green; pint clean.
 Permissions done 2026-06-12: CP access switched from Resrv's 'use resrv' to a dedicated 'use resrv vouchers' permission (own statamic-resrv-vouchers group), registered in VouchersProvider::bootPermissions() via Permission::extend — NOT $this->app->booted(), which in Statamic 6 fires immediately and re-queues during bootAddon(), double-registering (same bug just fixed in Resrv's ResrvProvider). routes/cp.php middleware + all three nav ->can() switched. Hard switch per user decision: 'use resrv' alone now 403s on voucher routes (addon untagged, so no public break — noted in README + new CHANGELOG.md). TestCase: + signInWithPermissions() role helper (mirrors Resrv's CpRoutePermissionTest), signInUserWithoutResrvPermission renamed signInUserWithoutPermissions. New CpPermissionTest: vouchers-only role reaches all CP routes, use-resrv-only role 403s (asserted via JSON requests — HTML GETs 302 to Statamic's unauthorized page), supers pass, Permission::boot()->tree() exactly-once regression guard. Pest 78/230 green; pint clean.
+Un-mark removed 2026-06-12 (user decision): marking used is now terminal — deleted VoucherStateMachine::unMark(), the VoucherUnmarked event, VoucherCpController::unMark(), the PATCH /un-mark route + unMarkUrl prop, and the Scan.vue Un-mark button; dropped the three un-mark tests (CpScanFlow, AttendedEmail, Expiration); decisions table, acceptance list, TU.9, README, CHANGELOG updated; fresh cp:build dist. Pest 75/219 green; pint clean.

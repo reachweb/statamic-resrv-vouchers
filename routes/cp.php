@@ -11,6 +11,5 @@ Route::middleware('can:use resrv vouchers')
         Route::get('/scan', [VoucherCpController::class, 'scanCp'])->name('scan');
         Route::post('/lookup', [VoucherCpController::class, 'lookup'])->name('lookup');
         Route::patch('/mark-used', [VoucherCpController::class, 'markUsed'])->name('mark-used');
-        Route::patch('/un-mark', [VoucherCpController::class, 'unMark'])->name('un-mark');
         Route::post('/resend/{voucher}', [VoucherCpController::class, 'resend'])->name('resend');
     });

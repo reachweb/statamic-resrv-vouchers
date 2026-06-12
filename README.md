@@ -95,9 +95,9 @@ To customize the "attended" email's subject, from, or markdown template, set the
 Both CP pages live under the **Resrv → Vouchers** nav section and require the `use resrv vouchers` permission:
 
 - **Vouchers / List** (`/cp/resrv-vouchers`) — a standard CP listing (sorted by issue date, newest first) with columns for ID, status, reservation reference, customer, expiry, used-at, and issued-at. It supports a pinned status filter (with active-filter badge), search by voucher ID or reservation reference, column sorting, per-user column preferences, and pagination. Re-sending the confirmation email (with the voucher attached) is available through the internal resend endpoint (see [Developer reference](#developer-reference)); it goes through Resrv's email dispatcher and honors Resrv's reservation-email settings, so if the confirmation email is disabled there the resend fails with *"Email could not be sent."* A per-row resend action in the listing is planned.
-- **Vouchers / Scan** (`/cp/resrv-vouchers/scan`) — an html5-qrcode camera scanner plus a text fallback with a **Find voucher** button. The fallback accepts whatever the guest can read off their confirmation email — the numeric **reservation code** or the six-character **booking reference** — as well as a raw pasted token; matching is exact (use the Vouchers list for fuzzy search), case-insensitive for references, whitespace is trimmed, and Enter submits, so a USB (keyboard-wedge) barcode scanner pointed at the field works without any camera. The camera does not auto-start: staff press **Start camera** (manual entry never needs camera permission), and **Stop camera** / **Switch camera** buttons appear while it runs (the latter only when the device has more than one camera). On a successful decode or lookup the page shows a result card: status badge, a color-coded banner (*"Voucher is valid."* / *"Voucher has already been used."* / *"Voucher has been invalidated."* / *"Voucher has expired."*), and the reservation's reference, guest name, dates, and quantity. Buttons gate by status: **Mark as used** when the voucher is `issued`, **Un-mark** when it is `used`, **Scan another** always — the card updates directly from the action's response, so a mark-used/un-mark never writes an extra scan row to the audit log.
+- **Vouchers / Scan** (`/cp/resrv-vouchers/scan`) — an html5-qrcode camera scanner plus a text fallback with a **Find voucher** button. The fallback accepts whatever the guest can read off their confirmation email — the numeric **reservation code** or the six-character **booking reference** — as well as a raw pasted token; matching is exact (use the Vouchers list for fuzzy search), case-insensitive for references, whitespace is trimmed, and Enter submits, so a USB (keyboard-wedge) barcode scanner pointed at the field works without any camera. The camera does not auto-start: staff press **Start camera** (manual entry never needs camera permission), and **Stop camera** / **Switch camera** buttons appear while it runs (the latter only when the device has more than one camera). On a successful decode or lookup the page shows a result card: status badge, a color-coded banner (*"Voucher is valid."* / *"Voucher has already been used."* / *"Voucher has been invalidated."* / *"Voucher has expired."*), and the reservation's reference, guest name, dates, and quantity. Buttons gate by status: **Mark as used** when the voucher is `issued` (marking used is final — there is no un-mark), **Scan another** always — the card updates directly from the action's response, so a mark-used never writes an extra scan row to the audit log.
 
-Every lookup, mark-used, un-mark, and resend is audit-logged — see [Developer reference](#developer-reference).
+Every lookup, mark-used, and resend is audit-logged — see [Developer reference](#developer-reference).
 
 ## Voucher lifecycle
 
@@ -105,8 +105,7 @@ Every lookup, mark-used, un-mark, and resend is audit-logged — see [Developer 
 | --- | --- |
 | Resrv `ReservationConfirmed` (eligible collection) | Voucher created with `status=issued`, expires at `date_end + grace_days`. Queued; idempotent — one voucher per reservation, re-fired events are a no-op. |
 | Resrv `BuildingReservationEmail` | Synchronous listener attaches the voucher PDF (A6 page: QR, guest name, reference, date range) and embeds the inline PNG. No voucher → the email sends normally without attachments. |
-| CP "Mark as used" | `status=used`, audit-logged, attended email queued to the customer (skipped if the customer has no email). |
-| CP "Un-mark" | `status=issued`, audit-logged, **no** customer email. |
+| CP "Mark as used" | `status=used`, audit-logged, attended email queued to the customer (skipped if the customer has no email). Final — there is no un-mark. |
 | Resrv `ReservationCancelled` / `Refunded` / `Expired` | `status=invalidated`, reason recorded (`cancelled` / `refunded` / `expired-reservation`). A voucher already `used` stays used — the customer did attend. Repeat events are a no-op. |
 | `now() > expires_at` while `issued` | Reports as `expired` (lazily — no DB write, no cron). Attempting "Mark as used" on an expired voucher fails with a 422. |
 
@@ -126,12 +125,11 @@ Voucher generation and the attended email run on the queue — see [Requirements
 **Events you can listen to** (all in `Reach\StatamicResrvVouchers\Events`):
 
 - `VoucherUsed` — fired when a voucher transitions to `used` (carries the voucher + acting user id).
-- `VoucherUnmarked` — fired when a used voucher is reverted to `issued`.
 - `VoucherInvalidated` — fired when a voucher is invalidated (carries the reason).
 
 The addon's integration surface with Resrv is consumed, never modified: it listens to `ReservationConfirmed`, `BuildingReservationEmail`, and `ReservationCancelled` / `ReservationRefunded` / `ReservationExpired`.
 
-**Audit table** — every scan-page and listing action writes a row to `resrv_voucher_scans`: `action` ∈ `scan` | `mark-used` | `un-mark` | `resend`, `result` ∈ `success` | `not-found` | `already-used` | `invalidated` | `expired` | `invalid-transition` | `not-sent`, plus the acting user id, IP address, and user agent.
+**Audit table** — every scan-page and listing action writes a row to `resrv_voucher_scans`: `action` ∈ `scan` | `mark-used` | `resend`, `result` ∈ `success` | `not-found` | `already-used` | `invalidated` | `expired` | `invalid-transition` | `not-sent`, plus the acting user id, IP address, and user agent.
 
 **Voucher table** — `resrv_vouchers`: string UUID primary key, unique `reservation_id` (the one-voucher-per-reservation guarantee) and `token`, indexed `status`, `expires_at`, `used_at` / `used_by_user_id`, `invalidated_reason`.
 
@@ -141,8 +139,7 @@ The addon's integration surface with Resrv is consumed, never modified: it liste
 | --- | --- | --- |
 | GET | `/cp/resrv-vouchers/list` | Paginated voucher JSON for the listing |
 | POST | `/cp/resrv-vouchers/lookup` | Find a voucher by signed token, reservation code, or booking reference (`query` param); returns voucher + reservation + status banner + canonical token |
-| PATCH | `/cp/resrv-vouchers/mark-used` | Transition `issued` → `used` |
-| PATCH | `/cp/resrv-vouchers/un-mark` | Transition `used` → `issued` |
+| PATCH | `/cp/resrv-vouchers/mark-used` | Transition `issued` → `used` (final — there is no reverse endpoint) |
 | POST | `/cp/resrv-vouchers/resend/{voucher}` | Re-send the confirmation email with the voucher attached |
 
 **Frontend development** — only needed when developing the addon itself; production installs ship the prebuilt `resources/dist/build/`. The `@statamic/cms` dependency resolves from the host site's vendor directory, so install with `npm install --install-links` (copies instead of symlinking). Then `npm run cp:dev` for Vite HMR or `npm run cp:build` to produce the deployable build the Statamic CP picks up via the `protected $vite` declaration in `VouchersProvider`. Stack: Vite 8, Tailwind v4, Vue 3 Inertia pages registered via `Statamic.$inertia.register(...)`.

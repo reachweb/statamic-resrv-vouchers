@@ -44,7 +44,6 @@ class VoucherCpController extends Controller
         return Inertia::render('resrv-vouchers::Vouchers/Scan', [
             'lookupUrl' => cp_route('resrv-vouchers.lookup'),
             'markUsedUrl' => cp_route('resrv-vouchers.mark-used'),
-            'unMarkUrl' => cp_route('resrv-vouchers.un-mark'),
         ]);
     }
 
@@ -110,15 +109,6 @@ class VoucherCpController extends Controller
         );
     }
 
-    public function unMark(Request $request): JsonResponse
-    {
-        return $this->applyTransition(
-            $request,
-            'un-mark',
-            fn (Voucher $v, ?string $uid) => $this->stateMachine->unMark($v, $uid),
-        );
-    }
-
     public function resend(Request $request, Voucher $voucher): JsonResponse
     {
         $reservation = $voucher->reservation;
@@ -175,7 +165,7 @@ class VoucherCpController extends Controller
     // The scan card renders entirely from this payload, so transition responses must carry the
     // same shape as lookup — the page must not re-scan to refresh (it would pollute the audit log).
     // The canonical token is exposed (despite being $hidden on the model) so reservation-code
-    // lookups can drive the token-only mark-used / un-mark endpoints.
+    // lookups can drive the token-only mark-used endpoint.
     private function voucherPayload(Voucher $voucher): array
     {
         $voucher->load('reservation.customer');

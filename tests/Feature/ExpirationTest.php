@@ -64,13 +64,3 @@ it('allows invalidating a lazy-expired voucher', function () {
     expect($voucher->status)->toBe(VoucherStatus::Invalidated);
     expect($voucher->invalidated_reason)->toBe('manual-cleanup');
 });
-
-it('refuses to un-mark a voucher that was never marked used', function () {
-    $reservation = $this->makeConfirmedReservation();
-    ReservationConfirmed::dispatch($reservation);
-
-    $voucher = Voucher::query()->where('reservation_id', $reservation->id)->firstOrFail();
-
-    expect(fn () => app(VoucherStateMachine::class)->unMark($voucher->fresh(), 'admin'))
-        ->toThrow(InvalidVoucherTransitionException::class);
-});
