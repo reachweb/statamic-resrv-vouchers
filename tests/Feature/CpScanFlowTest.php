@@ -179,7 +179,9 @@ it('resends the confirmation email and audit-logs the action', function () {
 
     $response = $this->postJson(cp_route('resrv-vouchers.resend', $voucher->id));
 
-    $response->assertOk();
+    // The resend body is a minimal acknowledgement — no full model, no token.
+    $response->assertOk()
+        ->assertExactJson(['voucher' => ['id' => $voucher->id]]);
     Mail::assertSent(ReservationConfirmedMail::class);
 
     expect(VoucherScan::query()->where('voucher_id', $voucher->id)
@@ -283,7 +285,11 @@ it('does not leak reservation payment internals or full customer PII in the look
 
     $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => $voucher->token])
         ->assertOk()
+        // UI-consumed fields survive the whitelist...
         ->assertJsonPath('reservation.customer.data.first_name', 'Test')
+        ->assertJsonPath('reservation.customer.data.last_name', 'Guest')
+        ->assertJsonPath('reservation.quantity', 2)
+        // ...while secrets and the full models do not.
         ->assertJsonMissingPath('reservation.payment_id')
         ->assertJsonMissingPath('reservation.price')
         ->assertJsonMissingPath('reservation.customer.email')
@@ -303,6 +309,22 @@ it('sorts the voucher list by a whitelisted column and falls back on unknown sor
 
     $this->getJson(cp_route('resrv-vouchers.index.json', ['sort' => 'token', 'order' => 'asc']))
         ->assertOk();
+});
+
+it('sorts by the effective status so a lazily-expired voucher orders as expired', function () {
+    $this->signInAdmin();
+    $active = $this->makeIssuedVoucher();
+    $expired = $this->makeIssuedVoucher();
+    $expired->forceFill(['expires_at' => now()->subDay()])->save();
+
+    // Effective status: $expired -> 'expired', $active -> 'issued'; ascending puts 'expired'
+    // first. A raw-column sort would treat both rows as 'issued' and not order them this way.
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['sort' => 'status', 'order' => 'asc']))
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $expired->id)
+        ->assertJsonPath('data.0.status', VoucherStatus::Expired->value)
+        ->assertJsonPath('data.1.id', $active->id)
+        ->assertJsonPath('data.1.status', VoucherStatus::Issued->value);
 });
 
 it('clamps perPage and paginates the voucher list', function () {

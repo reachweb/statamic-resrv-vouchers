@@ -163,6 +163,7 @@ abstract class TestCase extends AddonTestCase
             'item_id' => $entry->id(),
             'date_start' => now()->addDay(),
             'date_end' => now()->addDays(3),
+            'quantity' => 2,
             'price' => 200,
             'payment' => 50,
             'payment_id' => 'test',

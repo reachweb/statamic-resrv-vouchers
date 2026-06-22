@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
+use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Exceptions\InvalidVoucherTransitionException;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Models\VoucherScan;
@@ -63,7 +64,19 @@ class VoucherCpController extends Controller
         $sort = in_array(request('sort'), ['id', 'status', 'expires_at', 'used_at', 'created_at'], true)
             ? request('sort')
             : 'created_at';
-        $query->orderBy($sort, request('order') === 'asc' ? 'asc' : 'desc');
+        $order = request('order') === 'asc' ? 'asc' : 'desc';
+
+        if ($sort === 'status') {
+            // The listing displays the effective status (statusOf() reports a still-'issued'
+            // but past-expiry row as 'expired'), so order by that same computed value to keep
+            // the Status column monotonic. $order is whitelisted above, safe to interpolate.
+            $query->orderByRaw(
+                "case when status = ? and expires_at < ? then ? else status end {$order}",
+                [VoucherStatus::Issued->value, now(), VoucherStatus::Expired->value],
+            );
+        } else {
+            $query->orderBy($sort, $order);
+        }
 
         // Clamp so a huge ?perPage can't load/serialize unbounded rows (matches Resrv's CP listings).
         $perPage = (int) (request('perPage') ?? config('statamic.cp.pagination_size', 25));
