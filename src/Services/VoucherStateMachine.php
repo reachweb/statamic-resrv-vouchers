@@ -21,13 +21,27 @@ class VoucherStateMachine
 
     public function markUsed(Voucher $voucher, ?string $userId): void
     {
+        // Guard first for the lazy-expiry case and a clear error message; the conditional
+        // UPDATE below is the actual concurrency control — only the first of two simultaneous
+        // scans matches `status = 'issued'`, so the voucher can be redeemed exactly once.
         $this->guardTransition($voucher, [VoucherStatus::Issued], VoucherStatus::Used);
 
-        $voucher->forceFill([
-            'status' => VoucherStatus::Used,
-            'used_at' => now(),
-            'used_by_user_id' => $userId,
-        ])->save();
+        $affected = Voucher::query()
+            ->whereKey($voucher->getKey())
+            ->where('status', VoucherStatus::Issued->value)
+            ->update([
+                'status' => VoucherStatus::Used->value,
+                'used_at' => now(),
+                'used_by_user_id' => $userId,
+            ]);
+
+        if ($affected === 0) {
+            throw new InvalidVoucherTransitionException(
+                'Cannot transition voucher from used to used.'
+            );
+        }
+
+        $voucher->refresh();
 
         VoucherUsed::dispatch($voucher, $userId);
     }
