@@ -23,7 +23,14 @@ class QrRenderer
         $pngBytes ??= $this->png($voucher->token);
 
         $tmp = tempnam(sys_get_temp_dir(), 'voucher-qr-');
-        file_put_contents($tmp, $pngBytes);
+        if ($tmp === false) {
+            throw new \RuntimeException('Unable to create a temp file for the voucher QR.');
+        }
+
+        if (file_put_contents($tmp, $pngBytes) === false) {
+            @unlink($tmp);
+            throw new \RuntimeException('Unable to write the voucher QR to a temp file.');
+        }
 
         try {
             $pageWidth = 105;
