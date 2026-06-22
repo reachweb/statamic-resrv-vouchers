@@ -4,6 +4,7 @@
 
 ### Added
 
+- A **Vouchers** control-panel dashboard widget with quick-action buttons to open the scanner and the vouchers list. Add it via the `widgets` array in `config/statamic/cp.php` (`'type' => 'vouchers'`); it renders only for users with the `use resrv vouchers` permission.
 - The scan result card now shows the purchased entry's title and, when the reservation was booked with a rate, the rate label.
 
 ### Changed

@@ -15,6 +15,7 @@ use Reach\StatamicResrvVouchers\Listeners\GenerateVoucherForReservation;
 use Reach\StatamicResrvVouchers\Listeners\InvalidateVoucherOnCancellation;
 use Reach\StatamicResrvVouchers\Listeners\SendAttendedEmailOnVoucherUsed;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
+use Reach\StatamicResrvVouchers\Widgets\Vouchers;
 use RuntimeException;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -41,6 +42,10 @@ class VouchersProvider extends AddonServiceProvider
 
     protected $scopes = [
         VoucherStatus::class,
+    ];
+
+    protected $widgets = [
+        Vouchers::class,
     ];
 
     protected $listen = [

@@ -99,6 +99,22 @@ Both CP pages live under the **Resrv → Vouchers** nav section and require the 
 
 Every lookup, mark-used, and resend is audit-logged — see [Developer reference](#developer-reference).
 
+### Dashboard widget
+
+The addon ships a **Vouchers** dashboard widget — a card with one-tap **Scan a voucher** and **View all vouchers** buttons (the card title also links to the list), so door staff can reach the scanner from the CP home screen. Add it to your control panel dashboard in `config/statamic/cp.php`:
+
+```php
+'widgets' => [
+    [
+        'type' => 'vouchers',
+        'width' => 'md',
+        'can' => 'use resrv vouchers',
+    ],
+],
+```
+
+The widget renders only for users who hold the `use resrv vouchers` permission — it hides itself even if the `can` key is omitted, but listing it keeps the permission explicit (the dashboard entry's `can` is an additional pre-filter ANDed with the widget's own gate). `title` is configurable; `width` accepts Statamic 6's named sizes `sm`, `md`, `lg`, or `full` (the widget renders as a responsive fraction of the dashboard's width). The legacy numeric widths `25`/`33`/`50`/`66`/`75`/`100` still work and map onto those sizes (25/33 → `sm`, 50/66 → `md`, 75 → `lg`, 100 → `full`).
+
 ## Voucher lifecycle
 
 | Trigger | Result |
