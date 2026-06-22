@@ -3,11 +3,14 @@ import { onBeforeUnmount, reactive, ref } from 'vue';
 import axios from 'axios';
 import { Head } from '@statamic/cms/inertia';
 import { Alert, Badge, Button, CardPanel, Field, Header, Heading, Input } from '@statamic/cms/ui';
+import { useToast } from '../../composables/useToast.js';
 
 const props = defineProps({
     lookupUrl: { type: String, required: true },
     markUsedUrl: { type: String, required: true },
 });
+
+const toast = useToast();
 
 const scanner = ref(null);
 const scannerEl = ref(null);
@@ -116,6 +119,7 @@ async function markUsed() {
     try {
         const { data } = await axios.patch(props.markUsedUrl, { token: state.token });
         state.result = data;
+        toast.success(__('QR successfully marked as used'));
     } catch (e) {
         state.flash = e?.response?.data?.message ?? 'Could not mark used.';
     } finally {
