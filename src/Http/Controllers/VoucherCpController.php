@@ -133,7 +133,7 @@ class VoucherCpController extends Controller
             return response()->json(['message' => 'Email could not be sent.'], 422);
         }
 
-        return response()->json(['voucher' => $voucher]);
+        return response()->json(['voucher' => ['id' => $voucher->id]]);
     }
 
     private function applyTransition(Request $request, string $action, Closure $apply): JsonResponse
@@ -165,27 +165,37 @@ class VoucherCpController extends Controller
     // The scan card renders entirely from this payload, so transition responses must carry the
     // same shape as lookup — the page must not re-scan to refresh (it would pollute the audit log).
     // The canonical token is exposed (despite being $hidden on the model) so reservation-code
-    // lookups can drive the token-only mark-used endpoint.
+    // lookups can drive the token-only mark-used endpoint. Everything else is an explicit
+    // whitelist so payment ids and the full customer PII blob never reach the browser.
     private function voucherPayload(Voucher $voucher): array
     {
         $voucher->load('reservation.customer');
-        $voucher->reservation?->makeHidden(['entry']);
 
+        $reservation = $voucher->reservation;
         $status = $this->stateMachine->statusOf($voucher);
 
         $dateFormat = config('resrv-config.calculate_days_using_time') ? 'Y-m-d H:i' : 'Y-m-d';
 
         return [
-            'voucher' => $voucher,
+            'voucher' => ['id' => $voucher->id],
             'token' => $voucher->token,
-            'reservation' => $voucher->reservation,
+            'reservation' => $reservation ? [
+                'reference' => $reservation->reference,
+                'quantity' => $reservation->quantity,
+                'customer' => [
+                    'data' => [
+                        'first_name' => data_get($reservation->customer, 'data.first_name'),
+                        'last_name' => data_get($reservation->customer, 'data.last_name'),
+                    ],
+                ],
+            ] : null,
             'status' => $status->value,
             'status_banner' => $status->banner(),
-            'entry_title' => $this->entryTitle($voucher->reservation),
-            'rate' => $this->rateLabel($voucher->reservation),
+            'entry_title' => $this->entryTitle($reservation),
+            'rate' => $this->rateLabel($reservation),
             'dates' => [
-                'start' => $voucher->reservation?->date_start?->format($dateFormat),
-                'end' => $voucher->reservation?->date_end?->format($dateFormat),
+                'start' => $reservation?->date_start?->format($dateFormat),
+                'end' => $reservation?->date_end?->format($dateFormat),
             ],
         ];
     }

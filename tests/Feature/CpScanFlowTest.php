@@ -255,6 +255,41 @@ it('filters the voucher list by status and returns a filter badge', function () 
         ->assertJsonPath('meta.activeFilterBadges.voucher_status', 'Used');
 });
 
+it('buckets lazily-expired vouchers under the Expired filter and out of Issued, and reports expired status', function () {
+    $this->signInAdmin();
+    $active = $this->makeIssuedVoucher();
+    $expired = $this->makeIssuedVoucher();
+    $expired->forceFill(['expires_at' => now()->subDay()])->save();
+
+    $expiredFilter = base64_encode(json_encode(['voucher_status' => ['status' => ['expired']]]));
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['filters' => $expiredFilter]))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $expired->id)
+        ->assertJsonPath('data.0.status', VoucherStatus::Expired->value);
+
+    $issuedFilter = base64_encode(json_encode(['voucher_status' => ['status' => ['issued']]]));
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['filters' => $issuedFilter]))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $active->id);
+});
+
+it('does not leak reservation payment internals or full customer PII in the lookup payload', function () {
+    $this->signInAdmin();
+    $voucher = $this->makeIssuedVoucher();
+
+    $this->postJson(cp_route('resrv-vouchers.lookup'), ['query' => $voucher->token])
+        ->assertOk()
+        ->assertJsonPath('reservation.customer.data.first_name', 'Test')
+        ->assertJsonMissingPath('reservation.payment_id')
+        ->assertJsonMissingPath('reservation.price')
+        ->assertJsonMissingPath('reservation.customer.email')
+        ->assertJsonMissingPath('voucher.token');
+});
+
 it('sorts the voucher list by a whitelisted column and falls back on unknown sort fields', function () {
     $this->signInAdmin();
     $first = $this->makeIssuedVoucher();

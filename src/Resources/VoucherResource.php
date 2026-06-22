@@ -5,6 +5,7 @@ namespace Reach\StatamicResrvVouchers\Resources;
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
 use Reach\StatamicResrvVouchers\Blueprints\VoucherBlueprint;
+use Reach\StatamicResrvVouchers\Services\VoucherStateMachine;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
 
 class VoucherResource extends ResourceCollection
@@ -37,10 +38,15 @@ class VoucherResource extends ResourceCollection
     {
         $this->setColumns();
 
+        // Report the effective status so lazily-expired vouchers don't show as "Issued" here
+        // while the scanner reports "Expired" — statusOf() reads the already-loaded expires_at,
+        // so this adds no query per row.
+        $stateMachine = app(VoucherStateMachine::class);
+
         return [
             'data' => $this->collection->transform(fn ($voucher) => [
                 'id' => $voucher->id,
-                'status' => $voucher->status->value,
+                'status' => $stateMachine->statusOf($voucher)->value,
                 'reference' => $voucher->reservation?->reference,
                 'customer' => ['email' => $voucher->reservation?->customer?->email],
                 'expires_at' => $this->dateIndexValue('expires_at', $voucher->expires_at),
