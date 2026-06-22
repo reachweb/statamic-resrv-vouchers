@@ -24,6 +24,9 @@ it('queues the attended email to the customer when a voucher is marked used', fu
         fn (VoucherAttended $mail) => $mail->hasTo($customerEmail)
             && $mail->voucher->id === $voucher->id,
     );
+
+    // A redemption must dispatch VoucherUsed exactly once — never a duplicate attended email.
+    Mail::assertQueued(VoucherAttended::class, 1);
 });
 
 it('renders the attended email markdown with customer name and reference', function () {
