@@ -36,8 +36,15 @@ class VoucherStateMachine
             ]);
 
         if ($affected === 0) {
+            // The row left 'issued' between the guard and the update — a concurrent scan, or a
+            // cancel/refund/expire. Re-read so the rejection names the real current status
+            // ('used' or 'invalidated') rather than assuming it was used.
+            $current = Voucher::query()->whereKey($voucher->getKey())->value('status');
+
             throw new InvalidVoucherTransitionException(
-                'Cannot transition voucher from used to used.'
+                $current instanceof VoucherStatus
+                    ? "Cannot transition voucher from {$current->value} to used."
+                    : 'Voucher no longer exists.'
             );
         }
 

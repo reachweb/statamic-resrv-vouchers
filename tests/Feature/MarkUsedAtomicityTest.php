@@ -38,3 +38,16 @@ it('rejects a second redemption when the row was already marked used concurrentl
     // The losing request must not dispatch VoucherUsed, so no duplicate attended email.
     Mail::assertNothingQueued();
 });
+
+it('names the real current status when the row was concurrently invalidated', function () {
+    $voucher = $this->makeIssuedVoucher();
+
+    // A cancel/refund invalidated the row after this request loaded it as Issued.
+    Voucher::query()->whereKey($voucher->id)->update([
+        'status' => VoucherStatus::Invalidated->value,
+        'invalidated_reason' => 'cancelled',
+    ]);
+
+    expect(fn () => app(VoucherStateMachine::class)->markUsed($voucher, 'scanner'))
+        ->toThrow(InvalidVoucherTransitionException::class, 'Cannot transition voucher from invalidated to used.');
+});
