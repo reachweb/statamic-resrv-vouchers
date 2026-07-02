@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrvVouchers\Console\Commands\InstallVouchers;
 use Reach\StatamicResrvVouchers\Events\VoucherUsed;
+use Reach\StatamicResrvVouchers\Filters\VoucherEntry;
 use Reach\StatamicResrvVouchers\Filters\VoucherStatus;
 use Reach\StatamicResrvVouchers\Listeners\AttachVoucherToReservationEmail;
 use Reach\StatamicResrvVouchers\Listeners\GenerateVoucherForReservation;
@@ -42,6 +43,7 @@ class VouchersProvider extends AddonServiceProvider
 
     protected $scopes = [
         VoucherStatus::class,
+        VoucherEntry::class,
     ];
 
     protected $widgets = [

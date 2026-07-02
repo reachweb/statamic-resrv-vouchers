@@ -13,11 +13,12 @@ class VoucherBlueprint
                 'main' => [
                     'fields' => [
                         [
-                            'handle' => 'id',
+                            'handle' => 'entry',
                             'field' => [
                                 'type' => 'text',
                                 'listable' => true,
-                                'display' => 'ID',
+                                'display' => 'Entry',
+                                'sortable' => false,
                             ],
                         ],
                         [

@@ -202,9 +202,14 @@ it('renders the CP index page as Inertia with scope filters and list URL props',
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('resrv-vouchers::Vouchers/Index')
             ->where('listUrl', cp_route('resrv-vouchers.index.json'))
-            ->has('filters', 1, fn (AssertableInertia $filter) => $filter
+            ->has('filters', 2)
+            ->has('filters.0', fn (AssertableInertia $filter) => $filter
                 ->where('handle', 'voucher_status')
                 ->where('auto_apply', [])
+                ->etc()
+            )
+            ->has('filters.1', fn (AssertableInertia $filter) => $filter
+                ->where('handle', 'voucher_entry')
                 ->etc()
             )
         );
@@ -236,9 +241,10 @@ it('lists vouchers as JSON in the Listing protocol shape', function () {
 
     $response->assertOk()
         ->assertJsonPath('data.0.id', $voucher->id)
+        ->assertJsonPath('data.0.entry', 'Test Item')
         ->assertJsonPath('data.0.reference', $voucher->reservation->reference)
         ->assertJsonPath('data.0.customer.email', 'guest@example.com')
-        ->assertJsonPath('meta.columns.0.field', 'id')
+        ->assertJsonPath('meta.columns.0.field', 'entry')
         ->assertJsonPath('meta.activeFilterBadges', []);
 });
 
@@ -255,6 +261,22 @@ it('filters the voucher list by status and returns a filter badge', function () 
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.id', $used->id)
         ->assertJsonPath('meta.activeFilterBadges.voucher_status', 'Used');
+});
+
+it('filters the voucher list by entry and returns a filter badge', function () {
+    $this->signInAdmin();
+    $wanted = $this->makeIssuedVoucher();
+    $this->makeIssuedVoucher();
+
+    $filters = base64_encode(json_encode([
+        'voucher_entry' => ['entry' => [$wanted->reservation->item_id]],
+    ]));
+
+    $this->getJson(cp_route('resrv-vouchers.index.json', ['filters' => $filters]))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $wanted->id)
+        ->assertJsonPath('meta.activeFilterBadges.voucher_entry', 'Test Item');
 });
 
 it('buckets lazily-expired vouchers under the Expired filter and out of Issued, and reports expired status', function () {

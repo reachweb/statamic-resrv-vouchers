@@ -4,6 +4,8 @@ namespace Reach\StatamicResrvVouchers\Resources;
 
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Support\Collection;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrvVouchers\Blueprints\VoucherBlueprint;
 use Reach\StatamicResrvVouchers\Services\VoucherStateMachine;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
@@ -43,9 +45,15 @@ class VoucherResource extends ResourceCollection
         // so this adds no query per row.
         $stateMachine = app(VoucherStateMachine::class);
 
+        // Resolve every entry title in one query off the resrv_entries mirror. A voucher only
+        // exists for a mirrored, voucher-enabled entry (VoucherGenerator::ensureEligible), so the
+        // title is always present — this avoids the per-row Entry::find()/augmentation N+1.
+        $entryTitles = $this->entryTitles();
+
         return [
             'data' => $this->collection->transform(fn ($voucher) => [
                 'id' => $voucher->id,
+                'entry' => $entryTitles->get($voucher->reservation?->item_id),
                 'status' => $stateMachine->statusOf($voucher)->value,
                 'reference' => $voucher->reservation?->reference,
                 'customer' => ['email' => $voucher->reservation?->customer?->email],
@@ -69,6 +77,21 @@ class VoucherResource extends ResourceCollection
         }
 
         $this->columns = $columns->rejectUnlisted()->values();
+    }
+
+    private function entryTitles(): Collection
+    {
+        $itemIds = $this->collection
+            ->map(fn ($voucher) => $voucher->reservation?->item_id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($itemIds->isEmpty()) {
+            return collect();
+        }
+
+        return Entry::query()->whereIn('item_id', $itemIds->all())->pluck('title', 'item_id');
     }
 
     // The Listing component renders date columns with DateIndexFieldtype, which expects the
