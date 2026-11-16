@@ -3,12 +3,14 @@
 namespace Reach\StatamicResrvVouchers\Tests\Feature;
 
 use Illuminate\Support\Facades\Config;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\BuildingReservationEmail;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Services\QrRenderer;
+use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
 use Symfony\Component\Mime\Email;
 
 // By path: a published copy of the snippet must not stand in for the package's own.
@@ -104,4 +106,40 @@ it('does not attach the voucher to other Resrv emails that fire the build hook',
 
     expect($mailable->rawAttachments)->toBeEmpty()
         ->and($mailable->callbacks)->toBeEmpty();
+});
+
+it('issues a missing voucher when the confirmation email builds', function () {
+    // No ReservationConfirmed dispatch: as if issuing it at confirmation had failed.
+    $reservation = $this->makeConfirmedReservation();
+
+    $mailable = new ReservationConfirmedMail($reservation);
+    $mailable->build();
+
+    $voucher = Voucher::query()->where('reservation_id', $reservation->id)->first();
+
+    expect($voucher)->not->toBeNull()
+        ->and(collect($mailable->rawAttachments)->pluck('name')->all())->toBe(["voucher-{$voucher->id}.pdf"]);
+});
+
+it('does not issue a missing voucher for a booking that is no longer live', function () {
+    $reservation = $this->makeConfirmedReservation(['status' => ReservationStatus::CANCELLED->value]);
+
+    $mailable = new ReservationConfirmedMail($reservation);
+    $mailable->build();
+
+    expect(Voucher::query()->count())->toBe(0)
+        ->and($mailable->rawAttachments)->toBeEmpty();
+});
+
+it('still sends the confirmation email when a missing voucher cannot be issued', function () {
+    Config::set('resrv-vouchers.signing_key', 'base64:!!!');
+    $this->app->forgetInstance(VoucherTokenSigner::class);
+
+    $reservation = $this->makeConfirmedReservation();
+
+    $mailable = new ReservationConfirmedMail($reservation);
+    $mailable->build();
+
+    expect($mailable->rawAttachments)->toBeEmpty()
+        ->and(view()->file(QR_SNIPPET_PATH, $mailable->buildViewData())->render())->not->toContain('<img');
 });

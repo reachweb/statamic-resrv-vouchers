@@ -28,13 +28,15 @@ it('publishes the config file and accepts no for the optional publish prompts', 
 it('publishes email templates and language files when confirmed', function () {
     $emailTarget = resource_path('views/vendor/statamic-resrv-vouchers/email/vouchers/attended.blade.php');
     $langTarget = lang_path('vendor/statamic-resrv-vouchers/en/email.php');
-    // Remove everything the install publishes: a leftover copy (e.g. the QR snippet) would
-    // override the package's own view in every later test run.
-    $published = [resource_path('views/vendor/statamic-resrv-vouchers'), lang_path('vendor/statamic-resrv-vouchers')];
+    // Remove everything the install publishes: a leftover copy (e.g. the QR snippet or the
+    // config) would override the package's own in every later test run.
+    $removePublished = function () {
+        File::deleteDirectory(resource_path('views/vendor/statamic-resrv-vouchers'));
+        File::deleteDirectory(lang_path('vendor/statamic-resrv-vouchers'));
+        File::delete(config_path('resrv-vouchers.php'));
+    };
 
-    foreach ($published as $directory) {
-        File::deleteDirectory($directory);
-    }
+    $removePublished();
 
     $this->artisan('resrv-vouchers:install')
         ->expectsQuestion('Publish the email templates? (only needed if you wish to edit them)', true)
@@ -44,7 +46,5 @@ it('publishes email templates and language files when confirmed', function () {
     expect(file_exists($emailTarget))->toBeTrue();
     expect(file_exists($langTarget))->toBeTrue();
 
-    foreach ($published as $directory) {
-        File::deleteDirectory($directory);
-    }
+    $removePublished();
 });
