@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrvVouchers\Tests\Feature;
 
+use Illuminate\Support\Facades\File;
+
 it('registers the resrv-vouchers:install command', function () {
     expect(collect(\Artisan::all())->keys())->toContain('resrv-vouchers:install');
 });
@@ -26,11 +28,12 @@ it('publishes the config file and accepts no for the optional publish prompts', 
 it('publishes email templates and language files when confirmed', function () {
     $emailTarget = resource_path('views/vendor/statamic-resrv-vouchers/email/vouchers/attended.blade.php');
     $langTarget = lang_path('vendor/statamic-resrv-vouchers/en/email.php');
+    // Remove everything the install publishes: a leftover copy (e.g. the QR snippet) would
+    // override the package's own view in every later test run.
+    $published = [resource_path('views/vendor/statamic-resrv-vouchers'), lang_path('vendor/statamic-resrv-vouchers')];
 
-    foreach ([$emailTarget, $langTarget] as $path) {
-        if (file_exists($path)) {
-            unlink($path);
-        }
+    foreach ($published as $directory) {
+        File::deleteDirectory($directory);
     }
 
     $this->artisan('resrv-vouchers:install')
@@ -41,6 +44,7 @@ it('publishes email templates and language files when confirmed', function () {
     expect(file_exists($emailTarget))->toBeTrue();
     expect(file_exists($langTarget))->toBeTrue();
 
-    @unlink($emailTarget);
-    @unlink($langTarget);
+    foreach ($published as $directory) {
+        File::deleteDirectory($directory);
+    }
 });

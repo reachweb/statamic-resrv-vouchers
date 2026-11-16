@@ -86,7 +86,7 @@ Then add the include to `resources/views/vendor/statamic-resrv/email/reservation
 @include('statamic-resrv-vouchers::email.vouchers.partials.qr')
 ```
 
-The snippet uses `<img src="cid:voucher-qr">` against the inline image the addon embeds at send time — no extra wiring required. Its caption ("Show this QR code at check-in.") is translatable via the `statamic-resrv-vouchers::email.qr_caption` language key.
+The snippet uses `<img src="cid:voucher-qr">` against the inline image the addon embeds at send time — no extra wiring required. It renders only when that image was actually embedded in the email being sent, so bookings without a voucher get no broken image and the include needs no `@if` around it. Its caption ("Show this QR code at check-in.") is translatable via the `statamic-resrv-vouchers::email.qr_caption` language key.
 
 To customize the "attended" email's subject, from, or markdown template, set the relevant `email.attended` key in `config/resrv-vouchers.php`. The mailable extends `Reach\StatamicResrv\Mail\Mailable`, so it picks up Resrv's published theme components automatically. If you published the addon's email templates during install, the attended template itself is editable at `resources/views/vendor/statamic-resrv-vouchers/email/vouchers/attended.blade.php`.
 

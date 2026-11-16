@@ -16,6 +16,7 @@
 ### Fixed
 
 - With a real queue (database, Redis…), confirmation emails could go out without the voucher: Resrv sends the email right after the response, which can be before a queue worker has issued the voucher, and nothing emailed it afterwards.
+- The inline QR snippet (`statamic-resrv-vouchers::email.vouchers.partials.qr`) printed a broken image in confirmation emails for bookings without a voucher. It now renders only when the QR was embedded in that email, so you can drop any `@if` you wrapped around the include. If you published the addon's email templates, re-publish the snippet (or add the same check) to get the fix.
 
 ### Breaking
 

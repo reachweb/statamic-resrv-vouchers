@@ -11,6 +11,9 @@ use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Services\QrRenderer;
 use Symfony\Component\Mime\Email;
 
+// By path: a published copy of the snippet must not stand in for the package's own.
+const QR_SNIPPET_PATH = __DIR__.'/../../resources/views/email/vouchers/partials/qr.blade.php';
+
 beforeEach(function () {
     Config::set('resrv-vouchers.enabled_collections', ['pages']);
 });
@@ -53,6 +56,8 @@ it('attaches a PDF voucher and embeds the QR PNG when the confirmation email bui
     );
 
     expect($hasCid)->toBeTrue();
+
+    expect(view()->file(QR_SNIPPET_PATH, $mailable->buildViewData())->render())->toContain('src="cid:voucher-qr"');
 });
 
 it('still sends the confirmation email when voucher rendering fails', function () {
@@ -71,7 +76,8 @@ it('still sends the confirmation email when voucher rendering fails', function (
     $mailable = new ReservationConfirmedMail($reservation);
     $mailable->build();
 
-    expect($mailable->rawAttachments)->toBeEmpty();
+    expect($mailable->rawAttachments)->toBeEmpty()
+        ->and(view()->file(QR_SNIPPET_PATH, $mailable->buildViewData())->render())->not->toContain('<img');
 });
 
 it('sends the email without a voucher attachment when collection is not enabled', function () {
@@ -86,7 +92,8 @@ it('sends the email without a voucher attachment when collection is not enabled'
     $mailable = new ReservationConfirmedMail($reservation);
     $mailable->build();
 
-    expect($mailable->rawAttachments)->toBeEmpty();
+    expect($mailable->rawAttachments)->toBeEmpty()
+        ->and(view()->file(QR_SNIPPET_PATH, $mailable->buildViewData())->render())->not->toContain('<img');
 });
 
 it('does not attach the voucher to other Resrv emails that fire the build hook', function () {
