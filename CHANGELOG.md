@@ -10,6 +10,12 @@
 ### Changed
 
 - "Mark as used" and "Scan another" on the scan result card are now primary buttons.
+- Vouchers are now issued synchronously when Resrv confirms a reservation, so a queue worker is only needed for the attended email. A failure to issue one is logged ("Failed to generate voucher for reservation") and never interrupts Resrv's confirmation.
+- The voucher is attached only to Resrv's confirmation email. Resrv v6.5 also fires `BuildingReservationEmail` for the payment request email, which now never carries a voucher.
+
+### Fixed
+
+- With a real queue (database, Redis…), confirmation emails could go out without the voucher: Resrv sends the email right after the response, which can be before a queue worker has issued the voucher, and nothing emailed it afterwards.
 
 ### Breaking
 

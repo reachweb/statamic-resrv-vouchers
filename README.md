@@ -17,11 +17,11 @@ When a reservation is confirmed in a voucher-enabled collection, the addon:
 - **Laravel** 12.x or 13.x
 - **Resrv** v6. It ships the `Reach\StatamicResrv\Events\BuildingReservationEmail` event the addon listens to in order to attach the QR / PDF to the confirmation mailable.
 - **`use resrv vouchers` permission** for any CP user who should scan, list, or resend vouchers. The addon registers it in its own "Resrv Vouchers" permission group, so voucher access is grantable independently of Resrv — note that Resrv's `use resrv` permission does **not** grant voucher access.
-- **A running queue worker.** Voucher generation and the attended email are queued jobs. Without a worker no vouchers are created and no attended emails go out — alternatively set `QUEUE_CONNECTION=sync` for fully synchronous behavior.
+- **A running queue worker** for the attended ("thank you for attending") email, which is queued. Without a worker it never goes out — alternatively set `QUEUE_CONNECTION=sync`. Vouchers themselves are issued synchronously and need no worker.
 
 ## How it works
 
-The addon is purely event-driven and never modifies Resrv. When Resrv confirms a reservation, a queued listener issues exactly one voucher per reservation (re-fired events are a no-op). While Resrv builds its confirmation email, a synchronous listener attaches the voucher PDF and embeds the inline QR PNG into that same mailable — there is no separate voucher email. At the venue, staff scan the QR (or look the voucher up by reservation code or booking reference) on a CP page; marking the voucher used triggers the attended email. Cancelling, refunding, or expiring the reservation invalidates the voucher, and any voucher past `date_end + grace_days` reports as expired on its own.
+The addon is purely event-driven and never modifies Resrv. When Resrv confirms a reservation, a synchronous listener issues exactly one voucher per reservation (re-fired events are a no-op), so it already exists when Resrv sends the confirmation email right after the response. While Resrv builds its confirmation email, another synchronous listener attaches the voucher PDF and embeds the inline QR PNG into that same mailable — there is no separate voucher email, and no other Resrv email carries the voucher. At the venue, staff scan the QR (or look the voucher up by reservation code or booking reference) on a CP page; marking the voucher used triggers the attended email. Cancelling, refunding, or expiring the reservation invalidates the voucher, and any voucher past `date_end + grace_days` reports as expired on its own.
 
 ## Installation
 
@@ -41,7 +41,7 @@ After installing:
 
 - Add the collection handles you want vouchers issued for to `enabled_collections` in `config/resrv-vouchers.php`.
 - If you want the QR inline in the email body (the PDF is always attached), add the include snippet to Resrv's published confirmation template — see [Email customization](#email-customization).
-- Make sure a queue worker is running on the host.
+- Make sure a queue worker is running on the host (for the attended email).
 
 ## Configuration
 
@@ -119,17 +119,17 @@ The widget renders only for users who hold the `use resrv vouchers` permission �
 
 | Trigger | Result |
 | --- | --- |
-| Resrv `ReservationConfirmed` (eligible collection) | Voucher created with `status=issued`, expires at `date_end + grace_days`. Queued; idempotent — one voucher per reservation, re-fired events are a no-op. |
-| Resrv `BuildingReservationEmail` | Synchronous listener attaches the voucher PDF (A6 page: QR, guest name, reference, date range) and embeds the inline PNG. No voucher → the email sends normally without attachments. |
+| Resrv `ReservationConfirmed` (eligible collection) | Voucher created with `status=issued`, expires at `date_end + grace_days`. Synchronous, so it is ready for the confirmation email; idempotent — one voucher per reservation, re-fired events are a no-op. A failure is logged ("Failed to generate voucher for reservation") and never interrupts Resrv's confirmation. |
+| Resrv `BuildingReservationEmail` | For the confirmation email only, a synchronous listener attaches the voucher PDF (A6 page: QR, guest name, reference, date range) and embeds the inline PNG. Other emails that fire the hook (e.g. the payment request) are left alone. No voucher → the email sends normally without attachments. |
 | CP "Mark as used" | `status=used`, audit-logged, attended email queued to the customer (skipped if the customer has no email). Final — there is no un-mark. |
 | Resrv `ReservationCancelled` / `Refunded` / `Expired` | `status=invalidated`, reason recorded (`cancelled` / `refunded` / `expired-reservation`). A voucher already `used` stays used — the customer did attend. Repeat events are a no-op. |
 | `now() > expires_at` while `issued` | Reports as `expired` (lazily — no DB write, no cron). Attempting "Mark as used" on an expired voucher fails with a 422. |
 
-Voucher generation and the attended email run on the queue — see [Requirements](#requirements).
+The attended email runs on the queue — see [Requirements](#requirements).
 
 ## Troubleshooting
 
-- **Vouchers aren't generated / attended emails don't arrive** — no queue worker is running. Start one (`php artisan queue:work`) or set `QUEUE_CONNECTION=sync`.
+- **Attended emails don't arrive** — no queue worker is running. Start one (`php artisan queue:work`) or set `QUEUE_CONNECTION=sync`.
 - **"Mark as used" returns an error on a valid-looking voucher** — the voucher is past `expires_at` (lazily expired) or has been invalidated; neither can be marked used. Check the status banner on the scan result.
 - **Camera access blocked on `http://`** — browsers require HTTPS (or `localhost`) for `getUserMedia`. Deploy behind TLS or use the manual entry fallback (reservation code, booking reference, or token).
 - **`npm run cp:build` errors about `@statamic/cms` not found** — the file: dep resolves from the host site's `vendor/` (`file:../../../vendor/statamic/cms/resources/dist-package`). Run `composer install` in the host first, then `npm install --install-links` so npm copies the package rather than symlinking it (transitive deps like `@vitejs/plugin-vue` resolve from the addon's own `node_modules` only when copied).
