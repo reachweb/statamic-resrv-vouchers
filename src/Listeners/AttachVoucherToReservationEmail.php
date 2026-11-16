@@ -4,6 +4,7 @@ namespace Reach\StatamicResrvVouchers\Listeners;
 
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Events\BuildingReservationEmail;
+use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Services\QrRenderer;
 use Symfony\Component\Mime\Email;
@@ -15,7 +16,9 @@ class AttachVoucherToReservationEmail
 
     public function handle(BuildingReservationEmail $event): void
     {
-        if (! $event->reservation) {
+        // Resrv fires this hook for other emails too (e.g. the payment request); the voucher
+        // belongs only in the confirmation.
+        if (! $event->mailable instanceof ReservationConfirmed || ! $event->reservation) {
             return;
         }
 

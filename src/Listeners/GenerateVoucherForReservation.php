@@ -2,20 +2,17 @@
 
 namespace Reach\StatamicResrvVouchers\Listeners;
 
-use Illuminate\Contracts\Queue\ShouldBeUnique;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrvVouchers\Exceptions\ShouldNotIssueVoucherException;
 use Reach\StatamicResrvVouchers\Services\VoucherGenerator;
 use Throwable;
 
-class GenerateVoucherForReservation implements ShouldBeUnique, ShouldQueue
+// Synchronous on purpose: Resrv sends the confirmation email right after the response, before a
+// queue worker would have issued a queued voucher, so the email went out without it. This runs
+// inside Resrv's confirmation flows (payment webhooks included), so a failure is logged, never thrown.
+class GenerateVoucherForReservation
 {
-    public int $tries = 3;
-
-    public array $backoff = [10, 30, 60];
-
     public function __construct(private readonly VoucherGenerator $generator) {}
 
     public function handle(ReservationConfirmed $event): void
@@ -23,19 +20,11 @@ class GenerateVoucherForReservation implements ShouldBeUnique, ShouldQueue
         try {
             $this->generator->generateFor($event->reservation);
         } catch (ShouldNotIssueVoucherException) {
+        } catch (Throwable $e) {
+            Log::error('Failed to generate voucher for reservation', [
+                'reservation_id' => $event->reservation->id,
+                'exception' => $e->getMessage(),
+            ]);
         }
-    }
-
-    public function uniqueId(ReservationConfirmed $event): string
-    {
-        return (string) $event->reservation->id;
-    }
-
-    public function failed(ReservationConfirmed $event, Throwable $exception): void
-    {
-        Log::error('Failed to generate voucher for reservation', [
-            'reservation_id' => $event->reservation->id,
-            'exception' => $exception->getMessage(),
-        ]);
     }
 }

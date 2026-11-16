@@ -54,8 +54,8 @@ To verify the sibling Resrv tests still pass after a Phase 0 change:
 
 The addon does not modify Resrv; it consumes Resrv's events. Key wiring points (most still to-build, see `tasks.md`):
 
-- `Reach\StatamicResrv\Events\ReservationConfirmed` → `GenerateVoucherForReservation` listener (queued) creates a `Voucher` row.
-- `Reach\StatamicResrv\Events\BuildingReservationEmail` → `AttachVoucherToReservationEmail` listener (**must be synchronous** — it mutates the mailable). This event is the Phase 0 addition to Resrv (`src/Mail/Mailable.php` + `ReservationConfirmed::build()`), merged to Resrv `main` for the v6 release.
+- `Reach\StatamicResrv\Events\ReservationConfirmed` → `GenerateVoucherForReservation` listener creates a `Voucher` row. **Must stay synchronous** — Resrv sends the confirmation email right after the response (`dispatchAfterResponse`), so a queued voucher would not exist yet when that email builds. It logs failures instead of throwing, since it runs inside Resrv's webhooks.
+- `Reach\StatamicResrv\Events\BuildingReservationEmail` → `AttachVoucherToReservationEmail` listener (**must be synchronous** — it mutates the mailable). Acts only on the `ReservationConfirmed` mailable; Resrv also fires the hook for the payment request email. This event is the Phase 0 addition to Resrv (`src/Mail/Mailable.php` + `ReservationConfirmed::build()`), merged to Resrv `main` for the v6 release.
 - `Reach\StatamicResrv\Events\ReservationCancelled|Refunded|Expired` → `InvalidateVoucherOnCancellation`.
 - Internal: `VoucherUsed` → `SendAttendedEmailOnVoucherUsed` (the "thanks for attending" mail).
 

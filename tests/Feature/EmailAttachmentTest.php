@@ -3,8 +3,10 @@
 namespace Reach\StatamicResrvVouchers\Tests\Feature;
 
 use Illuminate\Support\Facades\Config;
+use Reach\StatamicResrv\Events\BuildingReservationEmail;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
+use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Services\QrRenderer;
 use Symfony\Component\Mime\Email;
@@ -85,4 +87,14 @@ it('sends the email without a voucher attachment when collection is not enabled'
     $mailable->build();
 
     expect($mailable->rawAttachments)->toBeEmpty();
+});
+
+it('does not attach the voucher to other Resrv emails that fire the build hook', function () {
+    $voucher = $this->makeIssuedVoucher();
+
+    $mailable = new ReservationPaymentRequest($voucher->reservation);
+    BuildingReservationEmail::dispatch($mailable, $voucher->reservation);
+
+    expect($mailable->rawAttachments)->toBeEmpty()
+        ->and($mailable->callbacks)->toBeEmpty();
 });

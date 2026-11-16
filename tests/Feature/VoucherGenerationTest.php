@@ -3,10 +3,14 @@
 namespace Reach\StatamicResrvVouchers\Tests\Feature;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Queue;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Models\Voucher;
+use Reach\StatamicResrvVouchers\Services\VoucherGenerator;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
+use RuntimeException;
 
 beforeEach(function () {
     Config::set('resrv-vouchers.enabled_collections', ['pages']);
@@ -54,4 +58,31 @@ it('sets expires_at to reservation.date_end + grace_days', function () {
     $voucher = Voucher::query()->where('reservation_id', $reservation->id)->firstOrFail();
 
     expect($voucher->expires_at->equalTo($reservation->date_end->copy()->addDays(2)))->toBeTrue();
+});
+
+it('issues the voucher while the event is dispatched, without waiting for a queue worker', function () {
+    // Resrv builds the confirmation email right after the response; a queued voucher would miss it.
+    Queue::fake();
+
+    $reservation = $this->makeConfirmedReservation();
+
+    ReservationConfirmed::dispatch($reservation);
+
+    expect(Voucher::query()->where('reservation_id', $reservation->id)->exists())->toBeTrue();
+});
+
+it('never lets a generation failure escape into Resrv\'s confirmation flow', function () {
+    $this->app->bind(VoucherGenerator::class, fn () => new class(app(VoucherTokenSigner::class)) extends VoucherGenerator
+    {
+        public function generateFor(Reservation $reservation): Voucher
+        {
+            throw new RuntimeException('database unavailable');
+        }
+    });
+
+    $reservation = $this->makeConfirmedReservation();
+
+    ReservationConfirmed::dispatch($reservation);
+
+    expect(Voucher::query()->count())->toBe(0);
 });
