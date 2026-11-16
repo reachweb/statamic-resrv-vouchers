@@ -3,14 +3,13 @@
 namespace Reach\StatamicResrvVouchers\Tests\Feature;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
-use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Models\Voucher;
-use Reach\StatamicResrvVouchers\Services\VoucherGenerator;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
-use RuntimeException;
 
 beforeEach(function () {
     Config::set('resrv-vouchers.enabled_collections', ['pages']);
@@ -39,6 +38,7 @@ it('is idempotent — re-firing the event does not create a duplicate voucher', 
 });
 
 it('does not create a voucher when the collection is not enabled', function () {
+    Log::spy();
     Config::set('resrv-vouchers.enabled_collections', ['other-collection']);
 
     $reservation = $this->makeConfirmedReservation();
@@ -46,6 +46,7 @@ it('does not create a voucher when the collection is not enabled', function () {
     ReservationConfirmed::dispatch($reservation);
 
     expect(Voucher::query()->count())->toBe(0);
+    Log::shouldNotHaveReceived('error');
 });
 
 it('sets expires_at to reservation.date_end + grace_days', function () {
@@ -71,18 +72,19 @@ it('issues the voucher while the event is dispatched, without waiting for a queu
     expect(Voucher::query()->where('reservation_id', $reservation->id)->exists())->toBeTrue();
 });
 
-it('never lets a generation failure escape into Resrv\'s confirmation flow', function () {
-    $this->app->bind(VoucherGenerator::class, fn () => new class(app(VoucherTokenSigner::class)) extends VoucherGenerator
-    {
-        public function generateFor(Reservation $reservation): Voucher
-        {
-            throw new RuntimeException('database unavailable');
-        }
-    });
+it('never lets a generation failure escape into Resrv\'s confirmation flow, and logs it', function () {
+    Log::spy();
+    // A malformed key makes building the generator throw, so this also fails if the generator
+    // is injected into the listener, where the container builds it outside handle()'s try.
+    Config::set('resrv-vouchers.signing_key', 'base64:!!!');
+    $this->app->forgetInstance(VoucherTokenSigner::class);
 
     $reservation = $this->makeConfirmedReservation();
 
     ReservationConfirmed::dispatch($reservation);
 
     expect(Voucher::query()->count())->toBe(0);
+    Log::shouldHaveReceived('error')
+        ->with('Failed to generate voucher for reservation', Mockery::on(fn ($context) => $context['reservation_id'] === $reservation->id))
+        ->once();
 });

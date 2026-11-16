@@ -6,17 +6,18 @@
 
 - A **Vouchers** control-panel dashboard widget with quick-action buttons to open the scanner and the vouchers list. Add it via the `widgets` array in `config/statamic/cp.php` (`'type' => 'vouchers'`); it renders only for users with the `use resrv vouchers` permission.
 - The scan result card now shows the purchased entry's title and, when the reservation was booked with a rate, the rate label.
+- A confirmation email for a live reservation that has no voucher yet, for example because issuing it at confirmation failed, now issues the voucher and attaches it. To repair a missing voucher, resend the confirmation from Resrv's reservation page.
 
 ### Changed
 
 - "Mark as used" and "Scan another" on the scan result card are now primary buttons.
 - Vouchers are now issued synchronously when Resrv confirms a reservation, so a queue worker is only needed for the attended email. A failure to issue one is logged ("Failed to generate voucher for reservation") and never interrupts Resrv's confirmation.
-- The voucher is attached only to Resrv's confirmation email. Resrv v6.5 also fires `BuildingReservationEmail` for the payment request email, which now never carries a voucher.
+- Only Resrv's confirmation email gets the voucher. Other emails that fire `BuildingReservationEmail`, such as the payment request email Resrv v6.5 added, are ignored.
 
 ### Fixed
 
 - With a real queue (database, Redis…), confirmation emails could go out without the voucher: Resrv sends the email right after the response, which can be before a queue worker has issued the voucher, and nothing emailed it afterwards.
-- The inline QR snippet (`statamic-resrv-vouchers::email.vouchers.partials.qr`) printed a broken image in confirmation emails for bookings without a voucher. It now renders only when the QR was embedded in that email, so you can drop any `@if` you wrapped around the include. If you published the addon's email templates, re-publish the snippet (or add the same check) to get the fix.
+- The inline QR snippet (`statamic-resrv-vouchers::email.vouchers.partials.qr`) printed a broken image in confirmation emails for bookings without a voucher. It now renders only when the QR was embedded in that email, so you can drop any `@if` you wrapped around the include. If you published the add-on's email templates, your copy at `resources/views/vendor/statamic-resrv-vouchers/email/vouchers/partials/qr.blade.php` still has the old snippet: delete it to use the package's, or wrap its contents in `@if (! empty($voucherQrEmbedded))` … `@endif`. Re-publishing doesn't replace an existing file without `--force`, and `--force` would also overwrite your attended email template.
 
 ### Breaking
 
