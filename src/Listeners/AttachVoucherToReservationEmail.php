@@ -43,6 +43,9 @@ class AttachVoucherToReservationEmail
             $event->mailable->withSymfonyMessage(function (Email $email) use ($pngBytes) {
                 $email->embed($pngBytes, 'voucher-qr', 'image/png');
             });
+
+            // The QR snippet renders only when this is set, so it never prints a broken image.
+            $event->mailable->with('voucherQrEmbedded', true);
         } catch (Throwable $e) {
             Log::error('Failed to attach voucher to reservation email', [
                 'voucher_id' => $voucher->id,
