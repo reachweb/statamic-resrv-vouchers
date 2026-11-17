@@ -15,7 +15,7 @@ When a reservation is confirmed in a voucher-enabled collection, the addon:
 - **Statamic** 6.x
 - **PHP** 8.4+ — the Vouchers package itself allows 8.3, but Resrv v6 requires 8.4, so that is the effective floor.
 - **Laravel** 12.x or 13.x
-- **Resrv** v6. It ships the `Reach\StatamicResrv\Events\BuildingReservationEmail` event the addon listens to in order to attach the QR / PDF to the confirmation mailable.
+- **Resrv** v6.2 or later. It ships the `Reach\StatamicResrv\Events\BuildingReservationEmail` event the addon listens to in order to attach the QR / PDF to the confirmation mailable.
 - **`use resrv vouchers` permission** for any CP user who should scan, list, or resend vouchers. The addon registers it in its own "Resrv Vouchers" permission group, so voucher access is grantable independently of Resrv — note that Resrv's `use resrv` permission does **not** grant voucher access.
 - **A running queue worker** for the attended ("thank you for attending") email, which is queued. Without a worker it never goes out — alternatively set `QUEUE_CONNECTION=sync`. Vouchers themselves are issued synchronously and need no worker.
 

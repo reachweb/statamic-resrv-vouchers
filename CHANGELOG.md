@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.0.0 (2026-11-17)
 
 ### Added
 
@@ -22,5 +22,6 @@
 
 ### Breaking
 
+- Requires Resrv v6.2 or later (`reachweb/statamic-resrv: ^6.2`). On Resrv 6.0 and 6.1 no vouchers would be issued, because the add-on relies on `ReservationStatus::live()`, added in 6.2.
 - The un-mark flow has been removed: marking a voucher as used is now final. Gone are the CP "Un-mark" button, the `PATCH /cp/resrv-vouchers/un-mark` endpoint, `VoucherStateMachine::unMark()`, and the `VoucherUnmarked` event. Existing `un-mark` rows in the `resrv_voucher_scans` audit table are unaffected.
 - CP access (routes and nav) is now gated by the addon's own `use resrv vouchers` permission instead of Resrv's `use resrv`. Grant the new permission (Roles → Permissions → Resrv Vouchers Permissions) to any role that should scan, list, or resend vouchers — having `use resrv` alone no longer grants voucher access. Voucher access is now grantable independently of Resrv access.
