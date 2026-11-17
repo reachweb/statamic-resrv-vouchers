@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrvVouchers\Services;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
@@ -18,17 +20,28 @@ class VoucherGenerator
     {
         $this->ensureEligible($reservation);
 
-        $id = (string) Str::uuid();
+        // Under the row lock Resrv's transitionTo() takes: a cancel or refund either commits first
+        // and is seen here, or waits for this insert, so InvalidateVoucherOnCancellation finds the
+        // voucher. The caller's copy may predate the cancel, so only the row decides.
+        return DB::transaction(function () use ($reservation) {
+            $status = Reservation::query()->lockForUpdate()->whereKey($reservation->id)->value('status');
 
-        return Voucher::firstOrCreate(
-            ['reservation_id' => $reservation->id],
-            [
-                'id' => $id,
-                'token' => $this->signer->sign($id),
-                'status' => VoucherStatus::Issued,
-                'expires_at' => $this->expiresAt($reservation),
-            ],
-        );
+            if (! in_array($status, ReservationStatus::live(), true)) {
+                throw new ShouldNotIssueVoucherException("Reservation {$reservation->id} is no longer live.");
+            }
+
+            $id = (string) Str::uuid();
+
+            return Voucher::firstOrCreate(
+                ['reservation_id' => $reservation->id],
+                [
+                    'id' => $id,
+                    'token' => $this->signer->sign($id),
+                    'status' => VoucherStatus::Issued,
+                    'expires_at' => $this->expiresAt($reservation),
+                ],
+            );
+        });
     }
 
     private function ensureEligible(Reservation $reservation): void

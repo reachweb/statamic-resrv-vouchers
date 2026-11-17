@@ -17,6 +17,7 @@
 ### Fixed
 
 - With a real queue (database, Redis…), confirmation emails could go out without the voucher: Resrv sends the email right after the response, which can be before a queue worker has issued the voucher, and nothing emailed it afterwards.
+- A booking cancelled or refunded while its voucher was being issued could keep a valid voucher that scanned as usable. A voucher is now issued only if the reservation is still confirmed (or partner) when it is written, checked under the same row lock Resrv's cancellation takes.
 - The inline QR snippet (`statamic-resrv-vouchers::email.vouchers.partials.qr`) printed a broken image in confirmation emails for bookings without a voucher. It now renders only when the QR was embedded in that email, so you can drop any `@if` you wrapped around the include. If you published the add-on's email templates, your copy at `resources/views/vendor/statamic-resrv-vouchers/email/vouchers/partials/qr.blade.php` still has the old snippet: delete it to use the package's, or wrap its contents in `@if (! empty($voucherQrEmbedded))` … `@endif`. Re-publishing doesn't replace an existing file without `--force`, and `--force` would also overwrite your attended email template.
 
 ### Breaking

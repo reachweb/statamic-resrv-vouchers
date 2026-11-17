@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Events\BuildingReservationEmail;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Services\QrRenderer;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
@@ -122,7 +123,9 @@ it('issues a missing voucher when the confirmation email builds', function () {
 });
 
 it('does not issue a missing voucher for a booking that is no longer live', function () {
-    $reservation = $this->makeConfirmedReservation(['status' => ReservationStatus::CANCELLED->value]);
+    // The email holds a copy loaded before a concurrent cancel committed: the row decides.
+    $reservation = $this->makeConfirmedReservation();
+    Reservation::query()->whereKey($reservation->id)->update(['status' => ReservationStatus::CANCELLED->value]);
 
     $mailable = new ReservationConfirmedMail($reservation);
     $mailable->build();
