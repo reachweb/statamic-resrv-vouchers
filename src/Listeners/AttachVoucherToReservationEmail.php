@@ -62,15 +62,11 @@ class AttachVoucherToReservationEmail
     }
 
     // Issuing the voucher at confirmation can fail; any later confirmation email (e.g. Resrv's
-    // "Resend confirmation") then issues it, unless the booking is no longer live — a fresh,
-    // valid QR for a cancelled booking would scan as usable. Resolved here, not injected:
-    // building the generator can throw (a bad signing key), which must stay inside the try.
+    // "Resend confirmation") then issues it. The generator refuses a booking that is no longer
+    // live, so a cancelled booking never gets a fresh QR that scans as usable. Resolved here,
+    // not injected: building the generator can throw (a bad signing key), which must stay inside the try.
     private function issueMissingVoucher(Reservation $reservation): ?Voucher
     {
-        if (! $reservation->isLive()) {
-            return null;
-        }
-
         try {
             return app(VoucherGenerator::class)->generateFor($reservation);
         } catch (ShouldNotIssueVoucherException) {

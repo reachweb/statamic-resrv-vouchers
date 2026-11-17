@@ -6,7 +6,9 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrvVouchers\Enums\VoucherStatus;
 use Reach\StatamicResrvVouchers\Models\Voucher;
 use Reach\StatamicResrvVouchers\Services\VoucherTokenSigner;
@@ -59,6 +61,16 @@ it('sets expires_at to reservation.date_end + grace_days', function () {
     $voucher = Voucher::query()->where('reservation_id', $reservation->id)->firstOrFail();
 
     expect($voucher->expires_at->equalTo($reservation->date_end->copy()->addDays(2)))->toBeTrue();
+});
+
+it('does not issue a voucher once the reservation row is no longer live', function () {
+    // The event carries a copy loaded before a concurrent cancel committed: the row decides.
+    $reservation = $this->makeConfirmedReservation();
+    Reservation::query()->whereKey($reservation->id)->update(['status' => ReservationStatus::CANCELLED->value]);
+
+    ReservationConfirmed::dispatch($reservation);
+
+    expect(Voucher::query()->count())->toBe(0);
 });
 
 it('issues the voucher while the event is dispatched, without waiting for a queue worker', function () {
